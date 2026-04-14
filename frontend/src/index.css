@@ -45,14 +45,14 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 215 25% 15%;
-    --sidebar-foreground: 210 15% 90%;
-    --sidebar-primary: 215 70% 55%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 25% 15%;
+    --sidebar-primary: 215 70% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 20% 22%;
-    --sidebar-accent-foreground: 210 15% 90%;
-    --sidebar-border: 215 20% 25%;
-    --sidebar-ring: 215 70% 55%;
+    --sidebar-accent: 210 15% 95%;
+    --sidebar-accent-foreground: 215 25% 15%;
+    --sidebar-border: 214 20% 88%;
+    --sidebar-ring: 215 70% 45%;
 
     --gradient-primary: linear-gradient(
       135deg,

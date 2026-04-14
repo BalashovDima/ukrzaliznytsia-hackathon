@@ -5,6 +5,8 @@ import {
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
+  Github,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -85,15 +87,48 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
 
       <div
         className={cn(
-          "py-3 border-t border-sidebar-border mt-auto",
-          isOpen ? "px-4" : "px-0 flex justify-center",
+          "py-3 border-t border-sidebar-border mt-auto flex flex-col gap-1",
+          isOpen ? "px-4" : "px-0 items-center justify-center",
         )}
       >
-        {isOpen && (
-          <p className="text-[10px] text-sidebar-foreground/40 whitespace-nowrap overflow-hidden">
-            v1.0 · FSD Architecture
-          </p>
-        )}
+        <Link
+          to={isClient ? "/manage/dashboard" : "/client/shipments"}
+          title={
+            !isOpen
+              ? isClient
+                ? "Увійти як Логіст"
+                : "Увійти як Клієнт"
+              : undefined
+          }
+          className={cn(
+            "flex items-center rounded-md text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            isOpen
+              ? "gap-3 px-3 py-2.5 w-full"
+              : "justify-center w-10 h-10 mx-auto",
+          )}
+        >
+          <ArrowRightLeft className="h-5 w-5 flex-shrink-0" />
+          {isOpen && (
+            <span className="truncate">
+              {isClient ? "Увійти як Логіст" : "Увійти як Клієнт"}
+            </span>
+          )}
+        </Link>
+        <a
+          href="https://github.com/BalashovDima/ukrzaliznytsia-hackathon"
+          target="_blank"
+          rel="noreferrer"
+          title={!isOpen ? "GitHub Project" : undefined}
+          className={cn(
+            "flex items-center rounded-md text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            isOpen
+              ? "gap-3 px-3 py-2.5 w-full"
+              : "justify-center w-10 h-10 mx-auto",
+          )}
+        >
+          <Github className="h-5 w-5 flex-shrink-0" />
+          {isOpen && <span className="truncate">Source code</span>}
+        </a>
       </div>
 
       <button

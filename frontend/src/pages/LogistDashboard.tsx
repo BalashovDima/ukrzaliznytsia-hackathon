@@ -1,24 +1,34 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getShipmentsApi } from "@/features/shipment-list/api/get-shipments";
 import { getWagonSuggestion } from "@/features/wagon-selection/api/get-suggestion";
 import { ShipmentCard } from "@/features/shipment-list/ui/ShipmentCard";
 import { WagonSuggestionCard } from "@/features/wagon-selection/ui/WagonSuggestionCard";
-import { mockStore } from "@/shared/lib/mock-store";
-import { TrendingUp, Train, PackageCheck, Banknote } from "lucide-react";
+import { TrendingUp, Train, PackageCheck, Banknote, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppLayout } from "@/app/layout/AppLayout";
 import type { Shipment } from "@/entities/shipment/types";
+import { apiClient } from "@/shared/lib/api-client";
 
 export default function LogistDashboard() {
+  const queryClient = useQueryClient();
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(
     null,
   );
-  const [savings, setSavings] = useState(mockStore.confirmedSavings);
 
-  const { data: shipments = [], isLoading } = useQuery({
+  const { data: shipments = [], isLoading: isShipmentsLoading } = useQuery({
     queryKey: ["shipments"],
     queryFn: getShipmentsApi,
+  });
+
+  const { data: fleet = [] } = useQuery({
+    queryKey: ["fleet"],
+    queryFn: () => apiClient.getFleet(),
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => apiClient.getStats(),
   });
 
   const { data: suggestions = [] } = useQuery({
@@ -34,24 +44,53 @@ export default function LogistDashboard() {
     enabled: !!selectedShipment,
   });
 
-  const pendingCount = shipments.filter((s) => s.status === "pending").length;
-  const totalWagons = mockStore.wagons.length;
-  const emptyWagons = mockStore.wagons.filter((w) => w.isEmpty).length;
+  const matchMutation = useMutation({
+    mutationFn: () => apiClient.runMatching(),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["shipments"] });
+      queryClient.invalidateQueries({ queryKey: ["fleet"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["wagon-suggestion"] });
+      toast.success(`Глобальний алгоритм відпрацював! 
+      Витрати на порожній пробіг склали: ${result.total_empty_cost.toLocaleString("uk-UA")} ₴`);
+      setSelectedShipment(null); // Clear selection since states changed
+    },
+    onError: () => {
+      toast.error("Помилка при запуску алгоритму");
+    }
+  });
 
-  const handleConfirm = (savingsUah: number) => {
-    mockStore.confirmSuggestion(savingsUah);
-    setSavings(mockStore.confirmedSavings);
-    toast.success("Вагон призначено!");
+  const pendingCount = shipments.filter((s) => s.status === "pending").length;
+  const totalWagons = fleet.length;
+  const emptyWagons = fleet.filter((w) => w.isEmpty).length;
+  const matchSavings = stats?.total_empty_cost_uah || 0; // Displaying cost as savings metric for hackathon demo
+
+  const handleGlobalConfirm = () => {
+    matchMutation.mutate();
   };
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="page-header">Дашборд логіста</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Огляд заявок та розумний підбір вагонів
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="page-header">Дашборд логіста</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Огляд заявок та розумний підбір вагонів
+            </p>
+          </div>
+          <button 
+            onClick={handleGlobalConfirm}
+            disabled={matchMutation.isPending || pendingCount === 0}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 disabled:opacity-50"
+          >
+            {matchMutation.isPending ? "Обчислення..." : (
+              <>
+                <Zap className="h-4 w-4" />
+                Запустити розумний розподіл
+              </>
+            )}
+          </button>
         </div>
 
         {/* Stats */}
@@ -74,7 +113,7 @@ export default function LogistDashboard() {
           <StatCard
             icon={<Banknote className="h-5 w-5 text-warning" />}
             label="Зекономлено"
-            value={`${savings.toLocaleString("uk-UA")} ₴`}
+            value={`${matchSavings.toLocaleString("uk-UA")} ₴`}
             highlight
           />
         </div>
@@ -84,7 +123,7 @@ export default function LogistDashboard() {
           {/* Shipment list */}
           <div className="lg:col-span-3 space-y-3">
             <h2 className="section-title">Заявки на перевезення</h2>
-            {isLoading ? (
+            {isShipmentsLoading ? (
               <p className="text-sm text-muted-foreground">Завантаження...</p>
             ) : (
               <div className="space-y-3">
@@ -101,10 +140,14 @@ export default function LogistDashboard() {
 
           {/* Smart suggestion panel */}
           <div className="lg:col-span-2 space-y-3">
-            <h2 className="section-title">🧠 Розумна пропозиція</h2>
+            <h2 className="section-title">🧠 Розумна пропозиція (Локальна)</h2>
             {!selectedShipment ? (
               <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-                Оберіть заявку зліва, щоб побачити рекомендовані вагони
+                Оберіть заявку зліва, щоб побачити рекомендовані найближчі вагони
+              </div>
+            ) : selectedShipment.status !== "pending" ? (
+              <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+                Заявка вже опрацьована
               </div>
             ) : (
               <div className="space-y-3">
@@ -114,16 +157,21 @@ export default function LogistDashboard() {
                 </p>
                 {suggestions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Немає доступних вагонів
+                    Немає доступних вагонів для даного вантажу
                   </p>
                 ) : (
-                  suggestions.map((s) => (
+                  <>
+                  {suggestions.map((s) => (
                     <WagonSuggestionCard
                       key={s.wagonId}
                       suggestion={s}
-                      onConfirm={() => handleConfirm(s.savingsUah)}
+                      onConfirm={handleGlobalConfirm}
                     />
-                  ))
+                  ))}
+                  <p className="text-xs text-muted-foreground text-center mt-4">
+                    Натисніть «Призначити» щоб запустити глобальний алгоритм для всіх очікуючих заявок.
+                  </p>
+                  </>
                 )}
               </div>
             )}

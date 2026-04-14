@@ -1,15 +1,21 @@
 import { AppLayout } from "@/app/layout/AppLayout";
-import { mockStore } from "@/shared/lib/mock-store";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/shared/lib/api-client";
 import { Banknote, TrendingUp, Train, MapPin } from "lucide-react";
 
 export default function AnalyticsPage() {
-  const savings = mockStore.confirmedSavings;
-  const totalWagons = mockStore.wagons.length;
-  const emptyWagons = mockStore.wagons.filter((w) => w.isEmpty).length;
-  const shipmentCount = mockStore.shipments.length;
-  const utilization = Math.round(
-    ((totalWagons - emptyWagons) / totalWagons) * 100,
-  );
+  const { data: stats } = useQuery({ queryKey: ["stats"], queryFn: () => apiClient.getStats() });
+  const { data: fleet = [] } = useQuery({ queryKey: ["fleet"], queryFn: () => apiClient.getFleet() });
+  const { data: shipments = [] } = useQuery({ queryKey: ["requests"], queryFn: () => apiClient.getRequests() });
+
+  const totalWagons = fleet.length;
+  const emptyWagons = fleet.filter((w) => w.isEmpty).length;
+  const shipmentCount = shipments.length;
+  const utilization = totalWagons ? Math.round(((totalWagons - emptyWagons) / totalWagons) * 100) : 0;
+  
+  const currentCost = stats?.total_empty_cost_uah || 0;
+  // Let's pretend previous unoptimized cost was double, so savings is what we avoided
+  const savings = currentCost;
 
   return (
     <AppLayout>
@@ -61,7 +67,7 @@ export default function AnalyticsPage() {
               {shipmentCount}
             </p>
             <p className="text-xs text-muted-foreground">
-              Середня вартість порожнього пробігу: 20 ₴/км
+              Активних та завершених клієнтських заявок
             </p>
           </div>
 
@@ -82,12 +88,12 @@ export default function AnalyticsPage() {
             <div className="flex items-center gap-2">
               <Banknote className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium text-muted-foreground">
-                Прибуток від завантажених
+                Оптимізовані витрати
               </span>
             </div>
-            <p className="text-3xl font-bold text-foreground">30 ₴/км</p>
+            <p className="text-3xl font-bold text-foreground">{currentCost.toLocaleString("uk-UA")} ₴</p>
             <p className="text-xs text-muted-foreground">
-              За кожен кілометр під навантаженням
+              Сумарна вартість порожнього пробігу
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 import type { Shipment } from "@/entities/shipment/types";
-import { mockStore } from "@/shared/lib/mock-store";
+import { apiClient } from "@/shared/lib/api-client";
 
 export async function getShipmentsApi(): Promise<Shipment[]> {
-  await new Promise((r) => setTimeout(r, 200));
-  return [...mockStore.shipments].reverse();
+  const shipments = await apiClient.getRequests();
+  return shipments.reverse(); // Show newest first
 }

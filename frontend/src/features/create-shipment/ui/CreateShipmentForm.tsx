@@ -33,7 +33,7 @@ export function CreateShipmentForm() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shipments"] });
       toast.success("Заявку створено успішно");
-      navigate("/");
+      navigate("/client/shipments");
     },
     onError: () => {
       toast.error("Помилка при створенні заявки");

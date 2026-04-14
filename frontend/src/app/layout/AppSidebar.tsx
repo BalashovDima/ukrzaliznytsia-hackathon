@@ -1,15 +1,21 @@
 import { Train, Plus, BarChart3, LayoutDashboard } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Дашборд", icon: LayoutDashboard },
-  { to: "/shipments", label: "Заявки", icon: Train },
-  { to: "/create-shipment", label: "Нова заявка", icon: Plus },
-  { to: "/analytics", label: "Аналітика", icon: BarChart3 },
+const CLIENT_NAV_ITEMS = [
+  { to: "/client/shipments", label: "Мої заявки", icon: Train },
+  { to: "/client/create-shipment", label: "Нова заявка", icon: Plus },
+];
+
+const MANAGE_NAV_ITEMS = [
+  { to: "/manage/dashboard", label: "Дашборд", icon: LayoutDashboard },
+  { to: "/manage/shipments", label: "Всі заявки", icon: Train },
+  { to: "/manage/analytics", label: "Аналітика", icon: BarChart3 },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
+  const isClient = location.pathname.startsWith("/client");
+  const navItems = isClient ? CLIENT_NAV_ITEMS : MANAGE_NAV_ITEMS;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -24,7 +30,7 @@ export function AppSidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <Link

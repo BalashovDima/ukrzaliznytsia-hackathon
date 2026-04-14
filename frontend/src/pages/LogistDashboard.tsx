@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { AppLayout } from "@/app/layout/AppLayout";
 import type { Shipment } from "@/entities/shipment/types";
 import { apiClient } from "@/shared/lib/api-client";
+import { RailwayMap } from "@/features/map/RailwayMap";
 
 export default function LogistDashboard() {
   const queryClient = useQueryClient();
@@ -91,6 +92,11 @@ export default function LogistDashboard() {
               </>
             )}
           </button>
+        </div>
+
+        {/* Map Visualization */}
+        <div className="w-full">
+          <RailwayMap />
         </div>
 
         {/* Stats */}

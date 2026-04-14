@@ -118,6 +118,28 @@ class ApiClient {
     if (!r.ok) throw new Error("Failed to run matching");
     return r.json();
   }
+
+  async getGraph(): Promise<{ edges: { source: string; target: string }[] }> {
+    const r = await fetch(`${API_BASE}/graph`);
+    if (!r.ok) throw new Error("Failed to fetch graph");
+    return r.json();
+  }
+
+  async clearRequests(): Promise<void> {
+    const r = await fetch(`${API_BASE}/requests/clear`, { method: "POST" });
+    if (!r.ok) throw new Error("Failed to clear requests");
+  }
+
+  async resetFleet(): Promise<void> {
+    const r = await fetch(`${API_BASE}/fleet/reset`, { method: "POST" });
+    if (!r.ok) throw new Error("Failed to reset fleet");
+  }
+
+  async stepSimulation(): Promise<any> {
+    const r = await fetch(`${API_BASE}/simulation/step`, { method: "POST" });
+    if (!r.ok) throw new Error("Failed to step simulation");
+    return r.json();
+  }
 }
 
 export const apiClient = new ApiClient();

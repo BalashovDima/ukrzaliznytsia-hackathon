@@ -4,7 +4,7 @@ from typing import List, Dict
 import uuid
 
 from models import Station, Wagon, ClientRequest, Assignment, RequestStatus, WagonStatus, MatchResult
-from simulation_data import STATIC_STATIONS, STATIC_WAGONS
+from simulation_data import STATIC_STATIONS, STATIC_WAGONS, RAILWAY_GRAPH, generate_wagons
 from algorithm import run_matching_algorithm
 
 app = FastAPI(title="Empty Run Buster API", version="1.0.0")
@@ -110,8 +110,6 @@ def simulate_step():
     """
     Advances the simulation step.
     Moves wagons that are EN_ROUTE_EMPTY to their destinations.
-    Normally, we'd calculate movement along the graph. For the MVP, we just teleport them to destination
-    and switch their status back to FREE, assuming they unloaded (or transitioned to full loaded run skipping the loaded step).
     """
     arrived_wagons = []
     for wagon in state.wagons:
@@ -123,6 +121,29 @@ def simulate_step():
             arrived_wagons.append(wagon.id)
             
     return {"message": "Step advanced.", "arrived_wagons": arrived_wagons}
+
+@app.get("/api/graph")
+def get_graph():
+    edges = []
+    # Build edges list dynamically
+    for u, v in RAILWAY_GRAPH.edges():
+        edges.append({"source": u, "target": v})
+    return {"edges": edges}
+
+@app.post("/api/requests/clear")
+def clear_requests():
+    state.requests.clear()
+    state.assignments.clear()
+    state.total_empty_distance = 0.0
+    state.total_empty_cost = 0.0
+    return {"message": "All requests cleared"}
+
+@app.post("/api/fleet/reset")
+def reset_fleet():
+    # Regenerate a random layout of the fleet
+    new_fleet = generate_wagons(state.stations)
+    state.wagons = new_fleet
+    return {"message": "Fleet randomized and reset"}
 
 if __name__ == "__main__":
     import uvicorn

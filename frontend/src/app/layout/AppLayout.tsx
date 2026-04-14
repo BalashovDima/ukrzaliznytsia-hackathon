@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
 import { AppSidebar } from "./AppSidebar";
+import { DevPanel } from "@/features/dev/DevPanel";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
@@ -21,6 +22,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
+      <DevPanel />
     </div>
   );
 }

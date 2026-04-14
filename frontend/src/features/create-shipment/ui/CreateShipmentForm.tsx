@@ -1,16 +1,21 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { createShipmentSchema, type CreateShipmentValues } from "../types";
 import { createShipmentApi } from "../api/create-shipment";
 import { CARGO_TYPE_LABELS, CargoType } from "@/entities/wagon/types";
-import { STATIONS } from "@/shared/config/stations";
+import { apiClient } from "@/shared/lib/api-client";
 
 export function CreateShipmentForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const { data: stations = [], isLoading: isStationsLoading } = useQuery({
+    queryKey: ["stations"],
+    queryFn: () => apiClient.getStations(),
+  });
 
   const {
     register,
@@ -92,7 +97,8 @@ export function CreateShipmentForm() {
           className="w-full rounded-md border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="">Оберіть...</option>
-          {STATIONS.map((s) => (
+          {isStationsLoading && <option disabled>Завантаження...</option>}
+          {stations.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
             </option>
@@ -115,7 +121,8 @@ export function CreateShipmentForm() {
           className="w-full rounded-md border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="">Оберіть...</option>
-          {STATIONS.map((s) => (
+          {isStationsLoading && <option disabled>Завантаження...</option>}
+          {stations.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
             </option>

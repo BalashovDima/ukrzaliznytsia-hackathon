@@ -103,6 +103,12 @@ class ApiClient {
     return data.map(mapWagon);
   }
 
+  async getStations(): Promise<{ id: string; name: string }[]> {
+    const r = await fetch(`${API_BASE}/stations`);
+    if (!r.ok) throw new Error("Failed to fetch stations");
+    return r.json();
+  }
+
   async runMatching(): Promise<any> {
     const r = await fetch(`${API_BASE}/match`, {
       method: "POST",

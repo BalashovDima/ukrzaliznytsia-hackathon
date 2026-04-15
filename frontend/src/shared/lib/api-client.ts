@@ -153,6 +153,12 @@ class ApiClient {
     return r.json();
   }
 
+  async generateRequests(count: number): Promise<any> {
+    const r = await fetch(`${API_BASE}/requests/generate?count=${count}`, { method: "POST" });
+    if (!r.ok) throw new Error("Failed to generate requests");
+    return r.json();
+  }
+
   async getRouteDetails(requestId: string): Promise<{
     request: {
       id: string;

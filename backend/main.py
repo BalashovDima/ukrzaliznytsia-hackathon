@@ -4,7 +4,7 @@ from typing import List, Dict
 import uuid
 import networkx as nx
 
-from models import Station, Wagon, ClientRequest, Assignment, RequestStatus, WagonStatus, MatchResult
+from models import Station, Wagon, ClientRequest, Assignment, RequestStatus, WagonStatus, MatchResult, CargoType
 from simulation_data import STATIC_STATIONS, STATIC_WAGONS, RAILWAY_GRAPH, generate_wagons, get_distance
 from algorithm import run_matching_algorithm
 
@@ -269,6 +269,27 @@ def reset_fleet():
     new_fleet = generate_wagons(state.stations)
     state.wagons = new_fleet
     return {"message": "Fleet randomized and reset"}
+
+@app.post("/api/requests/generate")
+def generate_requests(count: int = 5):
+    """Generate N random requests for demo/testing purposes."""
+    import random as rng
+    cargo_types = list(CargoType)
+    generated = []
+    for _ in range(count):
+        from_st = rng.choice(state.stations)
+        to_st = rng.choice([s for s in state.stations if s.id != from_st.id])
+        qty = rng.randint(1, 8)
+        req = ClientRequest(
+            id=f"REQ-{uuid.uuid4().hex[:6].upper()}",
+            from_station_id=from_st.id,
+            to_station_id=to_st.id,
+            cargo_type=rng.choice(cargo_types),
+            required_quantity=qty,
+        )
+        state.requests.append(req)
+        generated.append(req)
+    return {"message": f"Generated {count} requests", "requests": generated}
 
 if __name__ == "__main__":
     import uvicorn

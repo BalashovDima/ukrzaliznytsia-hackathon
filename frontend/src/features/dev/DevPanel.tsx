@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Settings, Play, Trash2, RefreshCw, Zap } from "lucide-react";
+import { Settings, Play, Trash2, RefreshCw, Zap, ListPlus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/shared/lib/api-client";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ export function DevPanel() {
   const queryClient = useQueryClient();
   const [logs, setLogs] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  const [generateCount, setGenerateCount] = useState(5);
 
   const addLog = (msg: string) => {
     setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 15));
@@ -55,6 +56,15 @@ export function DevPanel() {
       addLog(`Global algorithm ran. Cost: ${data.total_empty_cost} ₴`);
       invalidateAll();
       toast.info("Matcher executed");
+    },
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: (count: number) => apiClient.generateRequests(count),
+    onSuccess: (data) => {
+      addLog(`Generated ${data.requests.length} random requests.`);
+      invalidateAll();
+      toast.success(`${data.requests.length} requests generated`);
     },
   });
 
@@ -110,6 +120,28 @@ export function DevPanel() {
               >
                 <RefreshCw className="h-6 w-6 text-blue-500" />
                 <span className="text-xs font-semibold">Randomize Fleet</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Generate Requests</h3>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={generateCount}
+                onChange={(e) => setGenerateCount(Math.max(1, Math.min(50, Number(e.target.value))))}
+                className="w-20 px-3 py-2 border rounded-lg text-sm font-semibold text-center bg-white shadow-sm"
+              />
+              <button
+                onClick={() => generateMutation.mutate(generateCount)}
+                disabled={generateMutation.isPending}
+                className="flex-1 flex items-center justify-center gap-2 bg-white border shadow-sm p-3 rounded-xl hover:border-primary hover:bg-slate-50 transition-colors"
+              >
+                <ListPlus className="h-5 w-5 text-indigo-500" />
+                <span className="text-xs font-semibold">Generate Requests</span>
               </button>
             </div>
           </div>

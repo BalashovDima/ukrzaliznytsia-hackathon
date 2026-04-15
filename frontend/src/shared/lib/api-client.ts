@@ -152,6 +152,51 @@ class ApiClient {
     if (!r.ok) throw new Error("Failed to fetch wagon summary");
     return r.json();
   }
+
+  async getRouteDetails(requestId: string): Promise<{
+    request: {
+      id: string;
+      from_station_id: string;
+      from_station_name: string;
+      to_station_id: string;
+      to_station_name: string;
+      cargo_type: string;
+      required_quantity: number;
+      matched_quantity: number;
+      status: string;
+    };
+    assignments: Array<{
+      wagon_id: string;
+      wagon_type: string;
+      wagon_status: string;
+      empty_run: {
+        from_station_id: string;
+        from_station_name: string;
+        to_station_id: string;
+        to_station_name: string;
+        path: Array<{ id: string; name: string }>;
+        distance_km: number;
+        cost_uah: number;
+      };
+      loaded_run: {
+        from_station_id: string;
+        from_station_name: string;
+        to_station_id: string;
+        to_station_name: string;
+        path: Array<{ id: string; name: string }>;
+        distance_km: number;
+      };
+    }>;
+    totals: {
+      total_empty_distance_km: number;
+      total_empty_cost_uah: number;
+      wagons_assigned: number;
+    };
+  }> {
+    const r = await fetch(`${API_BASE}/requests/${requestId}/route-details`);
+    if (!r.ok) throw new Error("Failed to fetch route details");
+    return r.json();
+  }
 }
 
 export const apiClient = new ApiClient();

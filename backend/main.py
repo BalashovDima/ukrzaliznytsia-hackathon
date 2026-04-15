@@ -2,9 +2,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
 import uuid
+import networkx as nx
 
 from models import Station, Wagon, ClientRequest, Assignment, RequestStatus, WagonStatus, MatchResult
-from simulation_data import STATIC_STATIONS, STATIC_WAGONS, RAILWAY_GRAPH, generate_wagons
+from simulation_data import STATIC_STATIONS, STATIC_WAGONS, RAILWAY_GRAPH, generate_wagons, get_distance
 from algorithm import run_matching_algorithm
 
 app = FastAPI(title="Empty Run Buster API", version="1.0.0")
@@ -168,6 +169,91 @@ def get_graph():
     for u, v in RAILWAY_GRAPH.edges():
         edges.append({"source": u, "target": v})
     return {"edges": edges}
+
+@app.get("/api/requests/{request_id}/route-details")
+def get_route_details(request_id: str):
+    """
+    Returns detailed route info for a matched/fulfilled request:
+    - Each assignment with its wagon details
+    - The full shortest path for the empty run (wagon → pickup)
+    - The full shortest path for the loaded run (pickup → delivery)
+    """
+    req = next((r for r in state.requests if r.id == request_id), None)
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    req_assignments = [a for a in state.assignments if a.request_id == request_id]
+
+    # Build station lookup
+    station_map = {s.id: s for s in state.stations}
+
+    details = []
+    for a in req_assignments:
+        wagon = next((w for w in state.wagons if w.id == a.wagon_id), None)
+
+        # Compute full path for empty run (wagon origin → request origin)
+        try:
+            empty_path = nx.shortest_path(RAILWAY_GRAPH, a.from_station_id, a.to_station_id, weight='weight')
+        except nx.NetworkXNoPath:
+            empty_path = [a.from_station_id, a.to_station_id]
+
+        # Compute full path for loaded run (request origin → request destination)
+        try:
+            loaded_path = nx.shortest_path(RAILWAY_GRAPH, req.from_station_id, req.to_station_id, weight='weight')
+        except nx.NetworkXNoPath:
+            loaded_path = [req.from_station_id, req.to_station_id]
+
+        loaded_distance = get_distance(req.from_station_id, req.to_station_id)
+
+        # Resolve station names for path readability
+        def path_with_names(path):
+            return [{"id": sid, "name": station_map[sid].name if sid in station_map else sid} for sid in path]
+
+        details.append({
+            "wagon_id": a.wagon_id,
+            "wagon_type": wagon.type.value if wagon else "unknown",
+            "wagon_status": wagon.status.value if wagon else "unknown",
+            "empty_run": {
+                "from_station_id": a.from_station_id,
+                "from_station_name": station_map.get(a.from_station_id, None) and station_map[a.from_station_id].name,
+                "to_station_id": a.to_station_id,
+                "to_station_name": station_map.get(a.to_station_id, None) and station_map[a.to_station_id].name,
+                "path": path_with_names(empty_path),
+                "distance_km": round(a.distance, 1),
+                "cost_uah": round(a.cost, 1),
+            },
+            "loaded_run": {
+                "from_station_id": req.from_station_id,
+                "from_station_name": station_map.get(req.from_station_id, None) and station_map[req.from_station_id].name,
+                "to_station_id": req.to_station_id,
+                "to_station_name": station_map.get(req.to_station_id, None) and station_map[req.to_station_id].name,
+                "path": path_with_names(loaded_path),
+                "distance_km": round(loaded_distance, 1),
+            },
+        })
+
+    total_empty_dist = sum(d["empty_run"]["distance_km"] for d in details)
+    total_empty_cost = sum(d["empty_run"]["cost_uah"] for d in details)
+
+    return {
+        "request": {
+            "id": req.id,
+            "from_station_id": req.from_station_id,
+            "from_station_name": station_map.get(req.from_station_id, None) and station_map[req.from_station_id].name,
+            "to_station_id": req.to_station_id,
+            "to_station_name": station_map.get(req.to_station_id, None) and station_map[req.to_station_id].name,
+            "cargo_type": req.cargo_type.value,
+            "required_quantity": req.required_quantity,
+            "matched_quantity": req.matched_quantity,
+            "status": req.status.value,
+        },
+        "assignments": details,
+        "totals": {
+            "total_empty_distance_km": round(total_empty_dist, 1),
+            "total_empty_cost_uah": round(total_empty_cost, 1),
+            "wagons_assigned": len(details),
+        }
+    }
 
 @app.post("/api/requests/clear")
 def clear_requests():

@@ -25,16 +25,25 @@ const STATION_TYPE_LABELS: Record<string, string> = {
   standard: 'Вантажна',
 };
 
+/** Route highlight data passed from the dashboard */
+export interface RouteHighlight {
+  /** Each array is a sequence of station IDs forming a path segment */
+  emptyRunPaths: string[][];
+  /** The loaded run path (same for all wagons in a request) */
+  loadedRunPath: string[];
+  /** Station IDs to highlight specially (origins / destination) */
+  highlightStations: { wagonOrigins: string[]; pickupStation: string; deliveryStation: string };
+}
+
 /** Build a Leaflet DivIcon that shows the wagon count badge next to a station */
 function createWagonBadgeIcon(summary: { free: number; busy: number; en_route: number; total: number }) {
-  const { free, busy, en_route, total } = summary;
+  const { free, total } = summary;
   if (total === 0) return null;
 
-  // Badge color based on ratio of free wagons
   const freeRatio = free / total;
-  let bgColor = '#ef4444'; // mostly busy → red
-  if (freeRatio > 0.6) bgColor = '#22c55e'; // mostly free → green
-  else if (freeRatio > 0.3) bgColor = '#f59e0b'; // mixed → amber
+  let bgColor = '#ef4444';
+  if (freeRatio > 0.6) bgColor = '#22c55e';
+  else if (freeRatio > 0.3) bgColor = '#f59e0b';
 
   const html = `
     <div style="
@@ -62,9 +71,39 @@ function createWagonBadgeIcon(summary: { free: number; busy: number; en_route: n
 
   return L.divIcon({
     html,
-    className: '', // Disable default leaflet-div-icon style
+    className: '',
     iconSize: [28, 16],
-    iconAnchor: [-6, 8], // Offset so it appears to the right & center of the station dot
+    iconAnchor: [-6, 8],
+  });
+}
+
+/** Build a special highlighted station icon */
+function createHighlightIcon(label: string, color: string) {
+  const html = `
+    <div style="
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: ${color};
+      border: 2.5px solid #fff;
+      box-shadow: 0 0 0 3px ${color}44, 0 2px 8px rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      font-family: 'Inter', system-ui, sans-serif;
+      pointer-events: none;
+    ">
+      ${label}
+    </div>
+  `;
+  return L.divIcon({
+    html,
+    className: '',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
   });
 }
 
@@ -77,7 +116,6 @@ function buildTooltipHtml(
 
   let wagonRows = '';
   if (summary && summary.total > 0) {
-    // Per-type rows
     const typeEntries = Object.entries(summary.by_type);
     if (typeEntries.length > 0) {
       wagonRows = typeEntries.map(([wtype, counts]) => {
@@ -126,7 +164,11 @@ function buildTooltipHtml(
   `;
 }
 
-export function RailwayMap() {
+interface RailwayMapProps {
+  routeHighlight?: RouteHighlight | null;
+}
+
+export function RailwayMap({ routeHighlight }: RailwayMapProps) {
   const { data: stations = [] } = useQuery({
     queryKey: ["stations-detailed"],
     queryFn: () => fetch('http://127.0.0.1:8000/api/stations').then(r => r.json()),
@@ -138,13 +180,13 @@ export function RailwayMap() {
   const { data: wagonSummary } = useQuery({
     queryKey: ["wagon-summary"],
     queryFn: () => apiClient.getWagonSummary(),
-    refetchInterval: 5000, // Auto-refresh every 5s so map stays live
+    refetchInterval: 5000,
   });
 
   const mapCenter: [number, number] = [48.3794, 31.1656];
 
   const mapData = useMemo(() => {
-    if (!stations.length || !graph) return { nodes: [], polylines: [] };
+    if (!stations.length || !graph) return { nodes: [], polylines: [], stationMap: new Map() };
     
     const stationMap = new Map<string, any>();
     stations.forEach((s: any) => stationMap.set(s.id, s));
@@ -166,8 +208,20 @@ export function RailwayMap() {
       return null;
     }).filter(Boolean) as any[];
 
-    return { nodes, polylines };
+    return { nodes, polylines, stationMap };
   }, [stations, graph]);
+
+  /** Convert a path (station IDs) to LatLng array for Polyline */
+  const pathToPositions = (path: string[]): [number, number][] => {
+    return path
+      .map(sid => {
+        const s = mapData.stationMap.get(sid);
+        return s ? [s.x, s.y] as [number, number] : null;
+      })
+      .filter(Boolean) as [number, number][];
+  };
+
+  const isRouteMode = !!routeHighlight;
 
   return (
     <div className="w-full h-[400px] rounded-xl overflow-hidden border shadow-sm relative z-0">
@@ -177,47 +231,119 @@ export function RailwayMap() {
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
         
+        {/* Base railway lines — dimmed when route is highlighted */}
         {mapData.polylines.map((line) => (
           <Polyline 
             key={line.id} 
             positions={line.positions} 
             color="#94a3b8" 
             weight={1.5} 
-            opacity={0.6}
+            opacity={isRouteMode ? 0.15 : 0.6}
             dashArray="4"
           />
         ))}
 
+        {/* Route highlight: empty run paths (orange dashed) */}
+        {isRouteMode && routeHighlight!.emptyRunPaths.map((path, i) => {
+          const positions = pathToPositions(path);
+          return positions.length >= 2 ? (
+            <Polyline
+              key={`empty-${i}`}
+              positions={positions}
+              color="#f97316"
+              weight={3.5}
+              opacity={0.85}
+              dashArray="8 6"
+            >
+              <Tooltip sticky opacity={1}>
+                <span style={{ fontSize: 11, fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  🚃 Порожній пробіг (вагон → завантаження)
+                </span>
+              </Tooltip>
+            </Polyline>
+          ) : null;
+        })}
+
+        {/* Route highlight: loaded run path (green solid) */}
+        {isRouteMode && (() => {
+          const positions = pathToPositions(routeHighlight!.loadedRunPath);
+          return positions.length >= 2 ? (
+            <Polyline
+              positions={positions}
+              color="#22c55e"
+              weight={4}
+              opacity={0.9}
+            >
+              <Tooltip sticky opacity={1}>
+                <span style={{ fontSize: 11, fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  📦 Вантажний рейс (завантаження → доставка)
+                </span>
+              </Tooltip>
+            </Polyline>
+          ) : null;
+        })()}
+
+        {/* Station markers */}
         {mapData.nodes.map((node) => {
           const summary = wagonSummary?.[node.id];
           const badgeIcon = summary ? createWagonBadgeIcon(summary) : null;
+
+          // In route mode, check if this station is special
+          const hl = routeHighlight?.highlightStations;
+          const isWagonOrigin = hl?.wagonOrigins.includes(node.id);
+          const isPickup = hl?.pickupStation === node.id;
+          const isDelivery = hl?.deliveryStation === node.id;
+          const isHighlighted = isWagonOrigin || isPickup || isDelivery;
+
+          // Dim non-involved stations in route mode
+          const stationOpacity = isRouteMode && !isHighlighted ? 0.3 : 1;
 
           return (
             <React.Fragment key={node.id}>
               <CircleMarker
                 center={node.latLng}
-                radius={6}
+                radius={isHighlighted ? 8 : 6}
                 pathOptions={{ 
                   fillColor: STATION_COLORS[node.type] || '#64748b', 
                   color: '#ffffff', 
-                  weight: 1.5, 
-                  fillOpacity: 1 
+                  weight: isHighlighted ? 2.5 : 1.5, 
+                  fillOpacity: stationOpacity,
+                  opacity: stationOpacity,
                 }}
               >
-                <Tooltip
-                  direction="top"
-                  offset={[0, -10]}
-                  opacity={1}
-                >
+                <Tooltip direction="top" offset={[0, -10]} opacity={1}>
                   <div dangerouslySetInnerHTML={{ __html: buildTooltipHtml(node, summary) }} />
                 </Tooltip>
               </CircleMarker>
 
-              {/* Wagon count badge */}
-              {badgeIcon && (
+              {/* Wagon count badge (hide in route mode for clarity) */}
+              {!isRouteMode && badgeIcon && (
                 <Marker
                   position={node.latLng}
                   icon={badgeIcon}
+                  interactive={false}
+                />
+              )}
+
+              {/* Route mode: special markers for highlighted stations */}
+              {isRouteMode && isWagonOrigin && (
+                <Marker
+                  position={node.latLng}
+                  icon={createHighlightIcon('В', '#f97316')}
+                  interactive={false}
+                />
+              )}
+              {isRouteMode && isPickup && (
+                <Marker
+                  position={node.latLng}
+                  icon={createHighlightIcon('З', '#3b82f6')}
+                  interactive={false}
+                />
+              )}
+              {isRouteMode && isDelivery && (
+                <Marker
+                  position={node.latLng}
+                  icon={createHighlightIcon('Д', '#22c55e')}
                   interactive={false}
                 />
               )}
@@ -228,16 +354,36 @@ export function RailwayMap() {
       
       {/* Legend overlay */}
       <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm p-3 rounded-md border shadow-sm z-[1000] text-xs space-y-1.5">
-        <div className="font-semibold mb-2">Типи станцій</div>
-        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500 border border-white"></div> Сортувальна</div>
-        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-purple-500 border border-white"></div> Прикордонна</div>
-        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 border border-white"></div> Припортова</div>
-        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500 border border-white"></div> Вантажна</div>
-        <div className="border-t my-2"></div>
-        <div className="font-semibold mb-1">Вагони</div>
-        <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-sm border border-white" style={{ background: '#22c55e' }}></div> Багато вільних</div>
-        <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-sm border border-white" style={{ background: '#f59e0b' }}></div> Частково зайняті</div>
-        <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-sm border border-white" style={{ background: '#ef4444' }}></div> Мало вільних</div>
+        {isRouteMode ? (
+          <>
+            <div className="font-semibold mb-2">Маршрут заявки</div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-0.5 border-t-2 border-dashed" style={{ borderColor: '#f97316' }}></div>
+              Порожній пробіг
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-0.5" style={{ borderTop: '2.5px solid #22c55e' }}></div>
+              Вантажний рейс
+            </div>
+            <div className="border-t my-1.5"></div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ background: '#f97316' }}>В</div> Вагон (початок)</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ background: '#3b82f6' }}>З</div> Завантаження</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ background: '#22c55e' }}>Д</div> Доставка</div>
+          </>
+        ) : (
+          <>
+            <div className="font-semibold mb-2">Типи станцій</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500 border border-white"></div> Сортувальна</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-purple-500 border border-white"></div> Прикордонна</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 border border-white"></div> Припортова</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500 border border-white"></div> Вантажна</div>
+            <div className="border-t my-2"></div>
+            <div className="font-semibold mb-1">Вагони</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-sm border border-white" style={{ background: '#22c55e' }}></div> Багато вільних</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-sm border border-white" style={{ background: '#f59e0b' }}></div> Частково зайняті</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-sm border border-white" style={{ background: '#ef4444' }}></div> Мало вільних</div>
+          </>
+        )}
       </div>
     </div>
   );

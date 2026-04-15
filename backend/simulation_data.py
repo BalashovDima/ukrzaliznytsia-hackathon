@@ -40,57 +40,85 @@ FRONTEND_STATIONS = [
   {"id": "st_25", "name": "Шепетівка",         "type": "standard", "lat": 50.1833, "lng": 27.0667},
 ]
 
+# ──────────────────────────────────────────────────────────────
+# Railway connections between stations (undirected edges).
+# Each tuple is (station_a_id, station_b_id).
+# To add/remove a rail link, just edit this list.
+# Edge weights are computed automatically from station coords.
+# ──────────────────────────────────────────────────────────────
+RAILWAY_CONNECTIONS = [
+    # ── Main trunk: Київ — Фастів — Козятин — Вінниця — Хмельницький — Тернопіль — Львів
+    ("st_01", "st_24"),  # Київ          → Фастів
+    ("st_24", "st_23"),  # Фастів        → Козятин
+    ("st_23", "st_07"),  # Козятин       → Вінниця
+    ("st_07", "st_13"),  # Вінниця       → Хмельницький
+    ("st_13", "st_17"),  # Хмельницький  → Тернопіль
+    ("st_17", "st_02"),  # Тернопіль     → Львів
+
+    # ── Western branches ──────────────────────────────────────
+    ("st_02", "st_16"),  # Львів         → Івано-Франківськ
+    ("st_16", "st_19"),  # Івано-Фр.     → Ужгород
+    ("st_23", "st_25"),  # Козятин       → Шепетівка
+    ("st_25", "st_15"),  # Шепетівка     → Рівне
+    ("st_15", "st_18"),  # Рівне         → Луцьк
+    ("st_15", "st_02"),  # Рівне         → Львів
+
+    # ── Northern branch ───────────────────────────────────────
+    ("st_01", "st_09"),  # Київ          → Чернігів
+    ("st_01", "st_12"),  # Київ          → Житомир
+    ("st_12", "st_23"),  # Житомир       → Козятин
+
+    # ── Eastern corridor: Полтава — Харків ────────────────────
+    ("st_01", "st_08"),  # Київ          → Полтава
+    ("st_08", "st_05"),  # Полтава       → Харків
+    ("st_05", "st_11"),  # Харків        → Суми
+
+    # ── Central-Southern hub: Знам'янка ───────────────────────
+    ("st_08", "st_21"),  # Полтава       → Кременчук
+    ("st_21", "st_22"),  # Кременчук     → Знам'янка
+    ("st_01", "st_14"),  # Київ          → Черкаси
+    ("st_14", "st_22"),  # Черкаси       → Знам'янка
+
+    # ── Southern lines: ports & industry ──────────────────────
+    ("st_22", "st_10"),  # Знам'янка     → Кривий Ріг
+    ("st_22", "st_20"),  # Знам'янка     → Миколаїв
+    ("st_20", "st_03"),  # Миколаїв      → Одеса
+
+    # ── Дніпро — Запоріжжя corridor ───────────────────────────
+    ("st_04", "st_06"),  # Дніпро        → Запоріжжя
+    ("st_04", "st_21"),  # Дніпро        → Кременчук
+    ("st_04", "st_08"),  # Дніпро        → Полтава
+    ("st_06", "st_10"),  # Запоріжжя     → Кривий Ріг
+ 
+    # ── Additional corridors ───────────────────────────
+    ("st_03", "st_07"),  # Одеса         → Вінниця
+    ("st_19", "st_02"),  # Ужгород       → Львів
+    ("st_09", "st_11"),  # Чернігів      → Суми
+    ("st_07", "st_16"),  # Вінниця       → Івано-Франківськ
+    
 ]
 
 def generate_stations() -> Tuple[List[Station], nx.Graph]:
     stations = []
-    # Assign some random types
-    types = (
-        [StationType.SORTING] * 2 +
-        [StationType.BORDER] * 2 +
-        [StationType.PORT] * 2 +
-        [StationType.STANDARD] * 19
-    )
-    random.shuffle(types)
-
     G = nx.Graph()
 
-    for i, s_data in enumerate(FRONTEND_STATIONS):
+    for s_data in FRONTEND_STATIONS:
         s = Station(
             id=s_data["id"],
             name=s_data["name"],
-            type=types[i],
+            type=StationType(s_data["type"]),
             x=s_data["lat"],
             y=s_data["lng"]
         )
         stations.append(s)
         G.add_node(s.id, pos=(s.x, s.y), obj=s)
 
-    # Connect them based on geographic proximity
-    for n1 in G.nodes():
-        pos1 = G.nodes[n1]['pos']
-        distances = []
-        for n2 in G.nodes():
-            if n1 != n2:
-                pos2 = G.nodes[n2]['pos']
-                # Rough approximation of distance for graph topology
-                dist = ((pos1[0]-pos2[0])**2 + (pos1[1]-pos2[1])**2)**0.5
-                distances.append((dist, n2))
-        distances.sort()
-        # Connect to closest 3 stations
-        for j in range(min(3, len(distances))):
-            if not G.has_edge(n1, distances[j][1]):
-                G.add_edge(n1, distances[j][1], weight=distances[j][0])
-
-    if not nx.is_connected(G):
-        components = list(nx.connected_components(G))
-        for i in range(len(components)-1):
-            n1 = list(components[i])[0]
-            n2 = list(components[i+1])[0]
-            pos1 = G.nodes[n1]['pos']
-            pos2 = G.nodes[n2]['pos']
-            dist = ((pos1[0]-pos2[0])**2 + (pos1[1]-pos2[1])**2)**0.5
-            G.add_edge(n1, n2, weight=dist)
+    # Build edges from the manual connection list
+    for a, b in RAILWAY_CONNECTIONS:
+        pos_a = G.nodes[a]['pos']
+        pos_b = G.nodes[b]['pos']
+        dist = ((pos_a[0]-pos_b[0])**2 + (pos_a[1]-pos_b[1])**2)**0.5
+        G.add_edge(a, b, weight=dist)
 
     return stations, G
 

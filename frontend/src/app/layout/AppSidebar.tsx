@@ -7,9 +7,14 @@ import {
   ChevronRight,
   Github,
   ArrowRightLeft,
+  Info,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import infoMarkdown from "./info.md?raw";
 
 const CLIENT_NAV_ITEMS = [
   { to: "/client/shipments", label: "Мої заявки", icon: Train },
@@ -129,6 +134,32 @@ export function AppSidebar({ isOpen, onToggle }: AppSidebarProps) {
           <Github className="h-5 w-5 flex-shrink-0" />
           {isOpen && <span className="truncate">Source code</span>}
         </a>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              title={!isOpen ? "Інформація про систему" : undefined}
+              className={cn(
+                "flex items-center rounded-md text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                isOpen
+                  ? "gap-3 px-3 py-2.5 w-full text-left"
+                  : "justify-center w-10 h-10 mx-auto",
+              )}
+            >
+              <Info className="h-5 w-5 flex-shrink-0" />
+              {isOpen && <span className="truncate">Про систему</span>}
+            </button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogTitle className="sr-only">Інформація про систему</DialogTitle>
+            <DialogDescription className="sr-only">Опис логіки роботи алгоритмів розподілу.</DialogDescription>
+            <div className="prose prose-sm dark:prose-invert">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {infoMarkdown}
+              </ReactMarkdown>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <button

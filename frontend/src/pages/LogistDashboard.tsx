@@ -1,9 +1,7 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getShipmentsApi } from "@/features/shipment-list/api/get-shipments";
-import { getWagonSuggestion } from "@/features/wagon-selection/api/get-suggestion";
 import { ShipmentCard } from "@/features/shipment-list/ui/ShipmentCard";
-import { WagonSuggestionCard } from "@/features/wagon-selection/ui/WagonSuggestionCard";
 import {
   TrendingUp,
   Train,
@@ -48,19 +46,6 @@ export default function LogistDashboard() {
     queryFn: () => apiClient.getStats(),
   });
 
-  const { data: suggestions = [] } = useQuery({
-    queryKey: ["wagon-suggestion", selectedShipment?.id],
-    queryFn: () =>
-      selectedShipment
-        ? getWagonSuggestion(
-            selectedShipment.originStationId,
-            selectedShipment.cargoType,
-            selectedShipment.wagonCount,
-          )
-        : Promise.resolve([]),
-    enabled: !!selectedShipment && selectedShipment.status === "pending",
-  });
-
   // Fetch route details when inspecting a matched requet
   const { data: routeDetails, isLoading: isRouteLoading } = useQuery({
     queryKey: ["route-details", inspectedRequestId],
@@ -74,7 +59,6 @@ export default function LogistDashboard() {
       queryClient.invalidateQueries({ queryKey: ["shipments"] });
       queryClient.invalidateQueries({ queryKey: ["fleet"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
-      queryClient.invalidateQueries({ queryKey: ["wagon-suggestion"] });
       queryClient.invalidateQueries({ queryKey: ["wagon-summary"] });
       const matchSavings = Math.max(0, (result.naive_empty_cost || 0) - result.total_empty_cost);
       toast.success(
@@ -393,45 +377,31 @@ export default function LogistDashboard() {
                 )}
               </>
             ) : (
-              /* ── Smart suggestion panel (default) ── */
+              /* ── Pending Request Info Panel ── */
               <>
                 <h2 className="section-title">
-                  🧠 Розумна пропозиція (Локальна)
+                  💡 Глобальна оптимізація
                 </h2>
                 {!selectedShipment ? (
                   <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-                    Оберіть заявку зліва, щоб побачити рекомендовані найближчі
-                    вагони
+                    Оберіть заявку зліва, щоб переглянути деталі
                   </div>
                 ) : selectedShipment.status !== "pending" ? (
                   <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
                     Заявка вже опрацьована
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      Заявка <strong>{selectedShipment.id}</strong> — потрібно{" "}
-                      {selectedShipment.wagonCount} вагонів
-                    </p>
-                    {suggestions.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Немає доступних вагонів для даного вантажу
+                  <div className="rounded-lg border bg-card p-6 space-y-4">
+                    <div className="text-center space-y-2">
+                      <Zap className="h-8 w-8 text-orange-500 mx-auto" />
+                      <h3 className="font-semibold text-base">Заявка додана до черги обробки</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                        Заявка <strong>{selectedShipment.id}</strong> очікує на розподіл {selectedShipment.wagonCount} вагонів.
                       </p>
-                    ) : (
-                      <>
-                        {suggestions.map((s) => (
-                          <WagonSuggestionCard
-                            key={s.wagonId}
-                            suggestion={s}
-                            onConfirm={handleGlobalConfirm}
-                          />
-                        ))}
-                        <p className="text-xs text-muted-foreground text-center mt-4">
-                          Натисніть «Призначити» щоб запустити глобальний
-                          алгоритм для всіх очікуючих заявок.
-                        </p>
-                      </>
-                    )}
+                    </div>
+                    <div className="bg-muted p-4 rounded-md text-sm text-muted-foreground text-center">
+                      Натисніть <strong>«Запустити розумний розподіл»</strong> вгорі сторінки, щоб застосувати алгоритм глобальної оптимізації до всіх очікуючих заявок.
+                    </div>
                   </div>
                 )}
               </>

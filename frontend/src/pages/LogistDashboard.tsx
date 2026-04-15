@@ -292,29 +292,35 @@ export default function LogistDashboard() {
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-xs border-t pt-2 mt-1">
-                        <span>
-                          Порожній пробіг:{" "}
-                          <strong className="text-orange-500">
-                            {routeDetails.totals.total_empty_distance_km.toLocaleString(
-                              "uk-UA",
-                            )}{" "}
-                            км
-                          </strong>
-                        </span>
-                        <span>
-                          Вартість:{" "}
-                          <strong className="text-orange-500">
-                            {routeDetails.totals.total_empty_cost_uah.toLocaleString(
-                              "uk-UA",
-                            )}{" "}
-                            ₴
-                          </strong>
-                        </span>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 w-full">
+                          <div className="text-muted-foreground">🧠 Алгоритм:</div>
+                          <div className="font-medium text-green-600">
+                            {routeDetails.totals.total_empty_distance_km.toLocaleString("uk-UA")} км
+                            {" · "}
+                            {routeDetails.totals.total_empty_cost_uah.toLocaleString("uk-UA")} ₴
+                          </div>
+                          {routeDetails.totals.naive_empty_cost_uah > 0 && (
+                            <>
+                              <div className="text-muted-foreground">🎲 Випадковий:</div>
+                              <div className="font-medium text-orange-500">
+                                {routeDetails.totals.naive_empty_distance_km.toLocaleString("uk-UA")} км
+                                {" · "}
+                                {routeDetails.totals.naive_empty_cost_uah.toLocaleString("uk-UA")} ₴
+                              </div>
+                              <div className="text-muted-foreground">💰 Економія:</div>
+                              <div className="font-bold text-emerald-600">
+                                {routeDetails.totals.savings_km.toLocaleString("uk-UA")} км
+                                {" · "}
+                                {routeDetails.totals.savings_uah.toLocaleString("uk-UA")} ₴
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* Individual wagon assignments */}
-                    {routeDetails.assignments.map((a, idx) => (
+                    {routeDetails.assignments.map((a) => (
                       <div
                         key={a.wagon_id}
                         className="rounded-lg border bg-card p-4 space-y-2.5"
@@ -330,38 +336,51 @@ export default function LogistDashboard() {
                           </span>
                         </div>
 
-                        {/* Empty run leg */}
-                        <div className="text-xs space-y-1">
-                          <div className="font-semibold text-orange-500 flex items-center gap-1">
-                            🚃 Порожній пробіг
+                        {/* Smart pick (optimized) */}
+                        <div className="text-xs space-y-1 bg-green-50 rounded-md px-3 py-2">
+                          <div className="font-semibold text-green-700 flex items-center gap-1">
+                            🧠 Алгоритм: <span className="font-mono ml-1">{a.wagon_id}</span>
                           </div>
-                          <div className="text-muted-foreground pl-4">
+                          <div className="text-muted-foreground">
                             {a.empty_run.path.map((p) => p.name).join(" → ")}
                           </div>
-                          <div className="pl-4 flex gap-3">
-                            <span>
-                              {a.empty_run.distance_km.toLocaleString("uk-UA")}{" "}
-                              км
-                            </span>
-                            <span className="text-orange-500 font-medium">
-                              {a.empty_run.cost_uah.toLocaleString("uk-UA")} ₴
-                            </span>
+                          <div className="flex gap-3 font-medium text-green-700">
+                            <span>{a.empty_run.distance_km.toLocaleString("uk-UA")} км</span>
+                            <span>{a.empty_run.cost_uah.toLocaleString("uk-UA")} ₴</span>
                           </div>
                         </div>
 
+                        {/* Naive pick (greedy) */}
+                        {a.naive_comparison && (
+                          <div className="text-xs space-y-1 bg-orange-50 rounded-md px-3 py-2">
+                            <div className="font-semibold text-orange-700 flex items-center gap-1">
+                              🎲 Випадковий: <span className="font-mono ml-1">{a.naive_comparison.wagon_id}</span>
+                            </div>
+                            <div className="text-muted-foreground">
+                              {a.naive_comparison.path.map((p) => p.name).join(" → ")}
+                            </div>
+                            <div className="flex gap-3 font-medium text-orange-700">
+                              <span>{a.naive_comparison.distance_km.toLocaleString("uk-UA")} км</span>
+                              <span>{a.naive_comparison.cost_uah.toLocaleString("uk-UA")} ₴</span>
+                            </div>
+                            {a.naive_comparison.savings_uah > 0 && (
+                              <div className="text-emerald-700 font-bold">
+                                💰 -{a.naive_comparison.savings_km.toLocaleString("uk-UA")} км · -{a.naive_comparison.savings_uah.toLocaleString("uk-UA")} ₴ економія
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Loaded run leg */}
                         <div className="text-xs space-y-1">
-                          <div className="font-semibold text-green-600 flex items-center gap-1">
+                          <div className="font-semibold text-blue-600 flex items-center gap-1">
                             📦 Вантажний рейс
                           </div>
                           <div className="text-muted-foreground pl-4">
                             {a.loaded_run.path.map((p) => p.name).join(" → ")}
                           </div>
                           <div className="pl-4">
-                            <span>
-                              {a.loaded_run.distance_km.toLocaleString("uk-UA")}{" "}
-                              км
-                            </span>
+                            <span>{a.loaded_run.distance_km.toLocaleString("uk-UA")} км</span>
                           </div>
                         </div>
                       </div>

@@ -26,6 +26,7 @@ class AppState:
         self.wagons: List[Wagon] = list(STATIC_WAGONS)
         self.requests: List[ClientRequest] = []
         self.assignments: List[Assignment] = []
+        self.naive_assignments: List[Assignment] = []
 
         # Metrics
         self.total_empty_distance: float = 0.0
@@ -130,6 +131,10 @@ def match_wagons():
                 req.status = RequestStatus.PARTIAL
                 
         state.assignments.append(assignment)
+
+    # Store naive assignments for comparison
+    for naive_a in match_result.naive_assignments:
+        state.naive_assignments.append(naive_a)
         
     # Update global metrics
     state.total_empty_distance += match_result.total_empty_distance
@@ -215,6 +220,39 @@ def get_route_details(request_id: str):
         def path_with_names(path):
             return [{"id": sid, "name": station_map[sid].name if sid in station_map else sid} for sid in path]
 
+        # Look up the naive assignment for this request slot
+        # (naive assignments are ordered same as slots; match by request_id in order)
+        naive_a = next(
+            (na for na in state.naive_assignments
+             if na.request_id == a.request_id and na.wagon_id != a.wagon_id),
+            None
+        )
+        # If no distinct naive assignment found, try any naive for this request
+        if naive_a is None:
+            naive_a = next(
+                (na for na in state.naive_assignments if na.request_id == a.request_id),
+                None
+            )
+
+        naive_comparison = None
+        if naive_a:
+            naive_wagon = next((w for w in state.wagons if w.id == naive_a.wagon_id), None)
+            try:
+                naive_empty_path = nx.shortest_path(RAILWAY_GRAPH, naive_a.from_station_id, naive_a.to_station_id, weight='weight')
+            except nx.NetworkXNoPath:
+                naive_empty_path = [naive_a.from_station_id, naive_a.to_station_id]
+            naive_comparison = {
+                "wagon_id": naive_a.wagon_id,
+                "wagon_type": naive_wagon.type.value if naive_wagon else "unknown",
+                "from_station_id": naive_a.from_station_id,
+                "from_station_name": station_map.get(naive_a.from_station_id, None) and station_map[naive_a.from_station_id].name,
+                "path": path_with_names(naive_empty_path),
+                "distance_km": round(naive_a.distance, 1),
+                "cost_uah": round(naive_a.cost, 1),
+                "savings_km": round(naive_a.distance - a.distance, 1),
+                "savings_uah": round(naive_a.cost - a.cost, 1),
+            }
+
         details.append({
             "wagon_id": a.wagon_id,
             "wagon_type": wagon.type.value if wagon else "unknown",
@@ -236,10 +274,13 @@ def get_route_details(request_id: str):
                 "path": path_with_names(loaded_path),
                 "distance_km": round(loaded_distance, 1),
             },
+            "naive_comparison": naive_comparison,
         })
 
     total_empty_dist = sum(d["empty_run"]["distance_km"] for d in details)
     total_empty_cost = sum(d["empty_run"]["cost_uah"] for d in details)
+    naive_total_dist = sum(d["naive_comparison"]["distance_km"] for d in details if d["naive_comparison"])
+    naive_total_cost = sum(d["naive_comparison"]["cost_uah"] for d in details if d["naive_comparison"])
 
     return {
         "request": {
@@ -257,6 +298,10 @@ def get_route_details(request_id: str):
         "totals": {
             "total_empty_distance_km": round(total_empty_dist, 1),
             "total_empty_cost_uah": round(total_empty_cost, 1),
+            "naive_empty_distance_km": round(naive_total_dist, 1),
+            "naive_empty_cost_uah": round(naive_total_cost, 1),
+            "savings_km": round(naive_total_dist - total_empty_dist, 1),
+            "savings_uah": round(naive_total_cost - total_empty_cost, 1),
             "wagons_assigned": len(details),
         }
     }
@@ -265,6 +310,7 @@ def get_route_details(request_id: str):
 def clear_requests():
     state.requests.clear()
     state.assignments.clear()
+    state.naive_assignments.clear()
     state.total_empty_distance = 0.0
     state.total_empty_cost = 0.0
     state.naive_empty_distance = 0.0

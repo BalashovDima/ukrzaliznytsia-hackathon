@@ -194,10 +194,25 @@ class ApiClient {
         path: Array<{ id: string; name: string }>;
         distance_km: number;
       };
+      naive_comparison: {
+        wagon_id: string;
+        wagon_type: string;
+        from_station_id: string;
+        from_station_name: string;
+        path: Array<{ id: string; name: string }>;
+        distance_km: number;
+        cost_uah: number;
+        savings_km: number;
+        savings_uah: number;
+      } | null;
     }>;
     totals: {
       total_empty_distance_km: number;
       total_empty_cost_uah: number;
+      naive_empty_distance_km: number;
+      naive_empty_cost_uah: number;
+      savings_km: number;
+      savings_uah: number;
       wagons_assigned: number;
     };
   }> {

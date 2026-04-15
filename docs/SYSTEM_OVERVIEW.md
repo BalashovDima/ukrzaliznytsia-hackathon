@@ -22,10 +22,14 @@ When a client requests cargo transport (e.g. grain from Одеса to Львів
 │  • DevPanel      │        │  │  - wagons[]              │ │
 │                  │        │  │  - requests[]            │ │
 │                  │        │  │  - assignments[]         │ │
+│                  │        │  │  - naive_assignments[]   │ │
 │                  │        │  └──────────────────────────┘ │
 │                  │        │  ┌──────────────────────────┐ │
-│                  │        │  │  Algorithm (scipy)       │ │
-│                  │        │  │  Hungarian method        │ │
+│                  │        │  │  Optimized Algorithm     │ │
+│                  │        │  │  (Hungarian / scipy)     │ │
+│                  │        │  ├──────────────────────────┤ │
+│                  │        │  │  Greedy Baseline         │ │
+│                  │        │  │  (first-available)       │ │
 │                  │        │  └──────────────────────────┘ │
 │                  │        │  ┌──────────────────────────┐ │
 │                  │        │  │  Railway Graph (networkx)│ │
@@ -80,7 +84,7 @@ distance_km = graph_distance * 111.0
 
 ---
 
-## 4. The Matching Algorithm
+## 4. The Optimized Matching Algorithm
 
 **File:** `algorithm.py`  
 **Solver:** `scipy.optimize.linear_sum_assignment` (Hungarian algorithm)
@@ -181,17 +185,79 @@ assignment = Assignment(
 
 ```python
 MatchResult(
-    assignments=[...],           # list of Assignment objects
-    total_empty_distance=1234.5, # sum of all empty run distances (km)
-    total_empty_cost=24690.0     # sum of all costs (UAH)
+    assignments=[...],            # optimized Assignment objects
+    total_empty_distance=1234.5,  # sum of all optimized empty run distances (km)
+    total_empty_cost=24690.0,     # sum of all optimized costs (UAH)
+    naive_assignments=[...],      # greedy Assignment objects (see Section 5)
+    naive_empty_distance=3876.2,  # sum of all greedy empty run distances (km)
+    naive_empty_cost=77524.0,     # sum of all greedy costs (UAH)
 )
 ```
 
 ---
 
-## 5. Cost Calculation
+## 5. The Greedy Baseline ("Dumb" Algorithm)
 
-### 5.1 Formula
+**Purpose:** every time the matching algorithm runs, a parallel **greedy assignment** is computed on the same cost matrix. This provides a concrete, realistic baseline to compare against — proving the Hungarian optimizer's value with real numbers.
+
+### 5.1 How it works
+
+The greedy algorithm simulates a **dispatcher who picks wagons without looking at distances** — e.g., takes the first available wagon in the fleet list for each slot:
+
+```python
+naive_available = list(range(num_wagons))     # all wagon indices, in fleet order
+for j, slot in enumerate(required_slots):
+    if not naive_available:
+        break
+    i = naive_available.pop(0)               # take the first wagon, no optimization
+    record Assignment(wagon=type_wagons[i], slot=slot, cost=cost_matrix[i, j])
+```
+
+Critically, this uses the **same cost matrix** as the optimizer. The only difference is the selection rule:
+
+| | Optimized (Hungarian) | Greedy (Baseline) |
+|--|--|--|
+| **Selection rule** | Globally minimize total cost | Take the first available wagon |
+| **Guarantee** | Globally optimal | No guarantee — often far from optimal |
+| **Complexity** | O(n³) | O(n) |
+
+### 5.2 Why this is a fair comparison
+
+- Both algorithms operate on the **same fleet** and **same requests** at the same moment
+- Both are constrained to the same wagon-type rules (gondola can only match ore/stone, etc.)
+- The greedy algorithm represents a realistic real-world scenario: a human dispatcher assigning requests in order without looking at where all the wagons are
+
+> [!NOTE]
+> The "first available" wagon in fleet order is **not random** — it's deterministic based on wagon initialization order. Over many runs this approximates average-case random assignment, but the specific wagon chosen is reproducible.
+
+### 5.3 Savings calculation
+
+```
+savings_km  = naive_empty_distance  − optimized_empty_distance
+savings_uah = naive_empty_cost      − optimized_empty_cost
+```
+
+These are calculated both:
+- **Globally** — accumulated in `AppState` across all matching runs, shown in the dashboard stat cards
+- **Per-request** — returned by `GET /api/requests/{id}/route-details` for side-by-side visualization
+
+### 5.4 Example
+
+Request: 1 gondola wagon, pickup at Одеса.
+
+| | Algorithm | Greedy |
+|--|--|--|
+| Wagon chosen | `W-GON-047` (at Миколаїв) | `W-GON-001` (at Харків) |
+| Empty run path | Миколаїв → Одеса | Харків → Полтава → Кременчук → Знам'янка → Миколаїв → Одеса |
+| Distance | 112 km | 754 km |
+| Cost | 2,240 ₴ | 15,080 ₴ |
+| **Savings** | | **12,840 ₴** |
+
+---
+
+## 6. Cost Calculation
+
+### 6.1 Formula
 
 ```
 cost = empty_run_distance_km × COST_PER_KM
@@ -201,26 +267,22 @@ Where:
 - `COST_PER_KM` = **20.0 UAH/km** (configurable constant in `algorithm.py`)
 - `empty_run_distance_km` = shortest path distance through the railway graph, converted from degrees to km
 
-### 5.2 What counts as "cost"
+### 6.2 What counts as "cost"
 
 Only the **empty run** (wagon's current position → cargo pickup point) incurs cost in the optimization. The **loaded run** (pickup → delivery) is the same regardless of which wagon is chosen, so it's not part of the optimization objective.
 
-### 5.3 Example
+### 6.3 Dashboard metrics
 
-A gondola wagon at Харків (st_05) is assigned to a request that loads at Одеса (st_03).
-
-```
-Shortest path: Харків → Полтава → Кременчук → Знам'янка → Миколаїв → Одеса
-Graph distance: ~6.8 degrees
-Distance in km: 6.8 × 111 ≈ 754.8 km
-Cost: 754.8 × 20 = 15,096 UAH
-```
+| Stat Card | Source | Meaning |
+|-----------|--------|---------|
+| Витрати на порожні | `stats.total_empty_cost_uah` | Actual cost accumulated by the optimizer |
+| Зекономлено | `naive - optimized` | Savings vs greedy baseline |
 
 ---
 
-## 6. State Management & Simulation
+## 7. State Management & Simulation
 
-### 6.1 In-Memory State
+### 7.1 In-Memory State
 
 All data lives in `AppState` (no database):
 
@@ -229,11 +291,14 @@ All data lives in `AppState` (no database):
 | `stations` | 25 stations (immutable after init) |
 | `wagons` | 450 wagons (300 gondola, 100 grain hopper, 50 cement hopper) |
 | `requests` | Client requests (created via API or generated) |
-| `assignments` | Results of matching algorithm runs |
-| `total_empty_distance` | Running total of empty km |
-| `total_empty_cost` | Running total of empty cost |
+| `assignments` | Optimized assignment results |
+| `naive_assignments` | Greedy baseline assignments (for comparison) |
+| `total_empty_distance` | Running total of optimized empty km |
+| `total_empty_cost` | Running total of optimized cost |
+| `naive_empty_distance` | Running total of greedy empty km |
+| `naive_empty_cost` | Running total of greedy cost |
 
-### 6.2 Wagon Lifecycle
+### 7.2 Wagon Lifecycle
 
 ```
 FREE → (algorithm matches) → EN_ROUTE_EMPTY → (simulation step) → FREE
@@ -244,7 +309,10 @@ FREE → (algorithm matches) → EN_ROUTE_EMPTY → (simulation step) → FREE
 3. **Simulation step** (`POST /api/simulation/step`): All EN_ROUTE_EMPTY wagons instantly arrive at their destination and become FREE again
 4. **BUSY**: ~30% of wagons start as BUSY (simulating already-loaded wagons). These are excluded from matching.
 
-### 6.3 Request Lifecycle
+> [!NOTE]
+> Only the **optimized** assignments change wagon status to `EN_ROUTE_EMPTY`. Naive assignments are stored for comparison only and do not affect wagon state.
+
+### 7.3 Request Lifecycle
 
 ```
 PENDING → (partial match) → PARTIAL → (full match) → FULFILLED
@@ -255,23 +323,39 @@ PENDING → (partial match) → PARTIAL → (full match) → FULFILLED
 
 ---
 
-## 7. Route Visualization
+## 8. Route Visualization
 
-When inspecting a fulfilled request (`GET /api/requests/{id}/route-details`), the backend computes:
+### 8.1 Default map view
 
-1. **Empty run path**: `nx.shortest_path(graph, wagon_station, pickup_station)` — the station-by-station route the wagon travels empty
-2. **Loaded run path**: `nx.shortest_path(graph, pickup_station, delivery_station)` — the route the loaded cargo takes
+The map shows the full railway network with:
+- **Station markers** colored by type (sorting/border/port/standard)
+- **Wagon count badges** next to each station — color-coded green/amber/red by free ratio
+- **Rail line edges** drawn between manually defined connections
+- **Tooltips** on hover showing per-type wagon breakdown
 
-These are drawn on the map:
-- **Orange dashed line** = empty run
-- **Green solid line** = loaded run
-- **В marker** = wagon origin
-- **З marker** = loading station
+### 8.2 Route inspection mode
+
+When a fulfilled request is clicked, `GET /api/requests/{id}/route-details` is called and the map switches to **route inspection mode**:
+
+- **Orange dashed line** = empty run (wagon origin → loading station)
+- **Green solid line** = loaded run (loading station → delivery station)
+- **В marker** = wagon origin (where wagon started)
+- **З marker** = loading station (cargo pickup)
 - **Д marker** = delivery station
+
+Non-involved stations are dimmed. The right panel shows a **side-by-side comparison** per wagon:
+
+| Panel | Color | Shows |
+|-------|-------|-------|
+| 🧠 Algorithm | Green | Optimized wagon ID, full path, distance & cost |
+| 🎲 Greedy | Orange | Naive wagon ID, full path, distance & cost |
+| 💰 Savings | Emerald | Delta: `-X km · -Y ₴` per wagon |
+
+The summary card at the top aggregates all wagons: Algorithm total vs Greedy total vs total savings for the request.
 
 ---
 
-## 8. Fleet Composition
+## 9. Fleet Composition
 
 | Wagon Type | Count | ID Format | Carries |
 |------------|-------|-----------|---------|
@@ -284,7 +368,7 @@ These are drawn on the map:
 
 ---
 
-## 9. API Endpoints Reference
+## 10. API Endpoints Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -295,23 +379,30 @@ These are drawn on the map:
 | POST | `/api/requests` | Create a new request |
 | POST | `/api/requests/generate?count=N` | Generate N random requests |
 | POST | `/api/requests/clear` | Delete all requests & assignments |
-| POST | `/api/match` | Run the matching algorithm |
-| GET | `/api/requests/{id}/route-details` | Get assignment routes for a request |
+| POST | `/api/match` | Run the matching algorithm (+ greedy baseline) |
+| GET | `/api/requests/{id}/route-details` | Get optimized + naive route comparison |
 | POST | `/api/simulation/step` | Advance simulation (deliver en-route wagons) |
 | POST | `/api/fleet/reset` | Randomize all wagon positions |
 | GET | `/api/graph` | Get railway graph edges |
-| GET | `/api/stats` | Get global metrics |
+| GET | `/api/stats` | Get global metrics (optimized + naive + savings) |
 
 ---
 
-## 10. Key Design Decisions
+## 11. Key Design Decisions
 
-1. **Hungarian algorithm over greedy**: A greedy approach (assign closest wagon first) can miss globally optimal solutions. The Hungarian method guarantees minimum total distance.
+1. **Hungarian algorithm over greedy**: A greedy approach (assign closest wagon first) can miss globally optimal solutions. The Hungarian method guarantees minimum total distance across all requests simultaneously.
 
-2. **Per-type independent solving**: Since cargo types are strictly mapped to wagon types, solving each type independently doesn't lose optimality — a gondola can never fulfill a grain request anyway.
+2. **Concrete greedy baseline, not statistical**: Earlier versions used `mean(cost_matrix) × N` as a statistical estimate of random cost. This was replaced with an actual greedy assignment (first-available wagon) so that:
+   - Savings numbers are **real and defensible**, not estimated
+   - Specific alternative wagon IDs and paths can be shown side-by-side
+   - Judges can verify the numbers by tracing individual wagon assignments
 
-3. **Slot expansion**: Expanding a request for N wagons into N identical slots is the standard way to handle multi-unit demand in assignment problems without breaking the one-to-one structure.
+3. **Per-type independent solving**: Since cargo types are strictly mapped to wagon types, solving each type independently doesn't lose optimality — a gondola can never fulfill a grain request anyway.
 
-4. **Pre-computed distance matrix**: Computing all-pairs Dijkstra once at startup (O(V² log V)) is much faster than computing paths on-the-fly during matching.
+4. **Slot expansion**: Expanding a request for N wagons into N identical slots is the standard way to handle multi-unit demand in assignment problems without breaking the one-to-one structure required by `linear_sum_assignment`.
 
-5. **Degree-based distances**: Using coordinate geometry instead of real rail distances is a simplification, but the relative ordering of distances is preserved — the optimizer still picks the closest wagon.
+5. **Pre-computed distance matrix**: Computing all-pairs Dijkstra once at startup (O(V² log V)) is much faster than computing paths on-the-fly during matching.
+
+6. **Degree-based distances**: Using coordinate geometry instead of real rail distances is a simplification, but the relative ordering of distances is preserved — the optimizer still correctly identifies which wagon is closer.
+
+7. **Naive assignments don't change wagon state**: Only the optimized assignments mark wagons as `EN_ROUTE_EMPTY`. Naive assignments are stored purely as a comparison artifact and have no effect on the simulation.

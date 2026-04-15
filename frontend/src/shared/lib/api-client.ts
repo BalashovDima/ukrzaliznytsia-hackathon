@@ -1,7 +1,14 @@
 import type { Shipment, WagonSuggestion } from "@/entities/shipment/types";
 import type { Wagon } from "@/entities/wagon/types";
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const isLocal =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
+// Use the local backend if we are developing, otherwise use the current domain
+const API_BASE = isLocal
+  ? "http://127.0.0.1:8000/api"
+  : `${window.location.origin}/api`;
 
 type BackendRequest = {
   id: string;
@@ -86,13 +93,13 @@ class ApiClient {
       cargo_type: values.cargoType,
       required_quantity: values.wagonCount,
     };
-    
+
     const r = await fetch(`${API_BASE}/requests`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
-    
+
     if (!r.ok) throw new Error("Failed to create request");
     const data = await r.json();
     return mapRequestToShipment(data);
@@ -115,7 +122,7 @@ class ApiClient {
     const r = await fetch(`${API_BASE}/match`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({})
+      body: JSON.stringify({}),
     });
     if (!r.ok) throw new Error("Failed to run matching");
     return r.json();
@@ -143,20 +150,30 @@ class ApiClient {
     return r.json();
   }
 
-  async getWagonSummary(): Promise<Record<string, {
-    free: number;
-    busy: number;
-    en_route: number;
-    total: number;
-    by_type: Record<string, { free: number; busy: number; en_route: number }>;
-  }>> {
+  async getWagonSummary(): Promise<
+    Record<
+      string,
+      {
+        free: number;
+        busy: number;
+        en_route: number;
+        total: number;
+        by_type: Record<
+          string,
+          { free: number; busy: number; en_route: number }
+        >;
+      }
+    >
+  > {
     const r = await fetch(`${API_BASE}/stations/wagon-summary`);
     if (!r.ok) throw new Error("Failed to fetch wagon summary");
     return r.json();
   }
 
   async generateRequests(count: number): Promise<any> {
-    const r = await fetch(`${API_BASE}/requests/generate?count=${count}`, { method: "POST" });
+    const r = await fetch(`${API_BASE}/requests/generate?count=${count}`, {
+      method: "POST",
+    });
     if (!r.ok) throw new Error("Failed to generate requests");
     return r.json();
   }

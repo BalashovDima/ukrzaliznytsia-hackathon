@@ -171,7 +171,7 @@ interface RailwayMapProps {
 export function RailwayMap({ routeHighlight }: RailwayMapProps) {
   const { data: stations = [] } = useQuery({
     queryKey: ["stations-detailed"],
-    queryFn: () => fetch('http://127.0.0.1:8000/api/stations').then(r => r.json()),
+    queryFn: () => apiClient.getStations(),
   });
   const { data: graph } = useQuery({
     queryKey: ["graph"],

@@ -52,6 +52,7 @@ export default function LogistDashboard() {
       queryClient.invalidateQueries({ queryKey: ["fleet"] });
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       queryClient.invalidateQueries({ queryKey: ["wagon-suggestion"] });
+      queryClient.invalidateQueries({ queryKey: ["wagon-summary"] });
       toast.success(`Глобальний алгоритм відпрацював! 
       Витрати на порожній пробіг склали: ${result.total_empty_cost.toLocaleString("uk-UA")} ₴`);
       setSelectedShipment(null); // Clear selection since states changed

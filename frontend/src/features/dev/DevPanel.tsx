@@ -19,6 +19,7 @@ export function DevPanel() {
     queryClient.invalidateQueries({ queryKey: ["fleet"] });
     queryClient.invalidateQueries({ queryKey: ["stats"] });
     queryClient.invalidateQueries({ queryKey: ["wagon-suggestion"] });
+    queryClient.invalidateQueries({ queryKey: ["wagon-summary"] });
   };
 
   const stepMutation = useMutation({

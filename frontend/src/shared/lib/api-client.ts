@@ -140,6 +140,18 @@ class ApiClient {
     if (!r.ok) throw new Error("Failed to step simulation");
     return r.json();
   }
+
+  async getWagonSummary(): Promise<Record<string, {
+    free: number;
+    busy: number;
+    en_route: number;
+    total: number;
+    by_type: Record<string, { free: number; busy: number; en_route: number }>;
+  }>> {
+    const r = await fetch(`${API_BASE}/stations/wagon-summary`);
+    if (!r.ok) throw new Error("Failed to fetch wagon summary");
+    return r.json();
+  }
 }
 
 export const apiClient = new ApiClient();

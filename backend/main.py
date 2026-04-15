@@ -36,6 +36,45 @@ state = AppState()
 def get_stations():
     return state.stations
 
+@app.get("/api/stations/wagon-summary")
+def get_wagon_summary():
+    """Per-station wagon counts for map visualisation."""
+    summary = {}
+    for s in state.stations:
+        summary[s.id] = {
+            "free": 0,
+            "busy": 0,
+            "en_route": 0,
+            "total": 0,
+            "by_type": {},
+        }
+
+    for w in state.wagons:
+        sid = w.current_station_id
+        if sid not in summary:
+            continue
+        bucket = summary[sid]
+        bucket["total"] += 1
+
+        if w.status == WagonStatus.FREE:
+            bucket["free"] += 1
+        elif w.status == WagonStatus.BUSY:
+            bucket["busy"] += 1
+        else:
+            bucket["en_route"] += 1
+
+        wt = w.type.value
+        if wt not in bucket["by_type"]:
+            bucket["by_type"][wt] = {"free": 0, "busy": 0, "en_route": 0}
+        if w.status == WagonStatus.FREE:
+            bucket["by_type"][wt]["free"] += 1
+        elif w.status == WagonStatus.BUSY:
+            bucket["by_type"][wt]["busy"] += 1
+        else:
+            bucket["by_type"][wt]["en_route"] += 1
+
+    return summary
+
 @app.get("/api/fleet", response_model=List[Wagon])
 def get_fleet():
     return state.wagons

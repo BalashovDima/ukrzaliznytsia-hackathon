@@ -14,8 +14,8 @@ export default function AnalyticsPage() {
   const utilization = totalWagons ? Math.round(((totalWagons - emptyWagons) / totalWagons) * 100) : 0;
   
   const currentCost = stats?.total_empty_cost_uah || 0;
-  // Let's pretend previous unoptimized cost was double, so savings is what we avoided
-  const savings = currentCost;
+  const naiveCost = stats?.naive_empty_cost_uah || 0;
+  const savings = Math.max(0, naiveCost - currentCost);
 
   return (
     <AppLayout>
@@ -101,12 +101,12 @@ export default function AnalyticsPage() {
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-destructive" />
               <span className="text-sm font-medium text-muted-foreground">
-                Вартість порожнього пробігу
+                Витрати без оптимізації
               </span>
             </div>
-            <p className="text-3xl font-bold text-destructive">20 ₴/км</p>
+            <p className="text-3xl font-bold text-destructive">{naiveCost.toLocaleString("uk-UA")} ₴</p>
             <p className="text-xs text-muted-foreground">
-              Мінімізуємо через алгоритм підбору
+              Витрати при жадібному (випадковому) розподілі
             </p>
           </div>
         </div>

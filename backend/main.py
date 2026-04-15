@@ -30,6 +30,8 @@ class AppState:
         # Metrics
         self.total_empty_distance: float = 0.0
         self.total_empty_cost: float = 0.0
+        self.naive_empty_distance: float = 0.0
+        self.naive_empty_cost: float = 0.0
 
 state = AppState()
 
@@ -132,6 +134,8 @@ def match_wagons():
     # Update global metrics
     state.total_empty_distance += match_result.total_empty_distance
     state.total_empty_cost += match_result.total_empty_cost
+    state.naive_empty_distance += match_result.naive_empty_distance
+    state.naive_empty_cost += match_result.naive_empty_cost
     
     return match_result
 
@@ -140,6 +144,8 @@ def get_stats():
     return {
         "total_empty_distance_km": round(state.total_empty_distance, 2),
         "total_empty_cost_uah": round(state.total_empty_cost, 2),
+        "naive_empty_distance_km": round(state.naive_empty_distance, 2),
+        "naive_empty_cost_uah": round(state.naive_empty_cost, 2),
         "total_assignments": len(state.assignments),
         "requests_fulfilled": len([r for r in state.requests if r.status == RequestStatus.FULFILLED]),
         "requests_pending": len([r for r in state.requests if r.status != RequestStatus.FULFILLED])
@@ -261,6 +267,8 @@ def clear_requests():
     state.assignments.clear()
     state.total_empty_distance = 0.0
     state.total_empty_cost = 0.0
+    state.naive_empty_distance = 0.0
+    state.naive_empty_cost = 0.0
     return {"message": "All requests cleared"}
 
 @app.post("/api/fleet/reset")

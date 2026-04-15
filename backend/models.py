@@ -65,3 +65,5 @@ class MatchResult(BaseModel):
     assignments: List[Assignment]
     total_empty_distance: float
     total_empty_cost: float
+    naive_empty_distance: float = 0.0
+    naive_empty_cost: float = 0.0

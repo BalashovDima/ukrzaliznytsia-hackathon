@@ -24,6 +24,8 @@ type BackendWagon = {
 type BackendStats = {
   total_empty_distance_km: number;
   total_empty_cost_uah: number;
+  naive_empty_distance_km: number;
+  naive_empty_cost_uah: number;
   total_assignments: number;
   requests_fulfilled: number;
   requests_pending: number;

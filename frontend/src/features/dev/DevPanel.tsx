@@ -53,7 +53,8 @@ export function DevPanel() {
   const runMatchMutation = useMutation({
     mutationFn: () => apiClient.runMatching(),
     onSuccess: (data) => {
-      addLog(`Global algorithm ran. Cost: ${data.total_empty_cost} ₴`);
+      const savings = Math.max(0, (data.naive_empty_cost || 0) - data.total_empty_cost);
+      addLog(`Global algorithm ran. Cost: ${data.total_empty_cost.toLocaleString()} ₴ (Saved: ~${savings.toLocaleString()} ₴)`);
       invalidateAll();
       toast.info("Matcher executed");
     },

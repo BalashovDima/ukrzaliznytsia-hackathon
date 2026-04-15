@@ -4,7 +4,17 @@ import { getShipmentsApi } from "@/features/shipment-list/api/get-shipments";
 import { getWagonSuggestion } from "@/features/wagon-selection/api/get-suggestion";
 import { ShipmentCard } from "@/features/shipment-list/ui/ShipmentCard";
 import { WagonSuggestionCard } from "@/features/wagon-selection/ui/WagonSuggestionCard";
-import { TrendingUp, Train, PackageCheck, Banknote, Zap, X, MapPin, ArrowRight, Route } from "lucide-react";
+import {
+  TrendingUp,
+  Train,
+  PackageCheck,
+  Banknote,
+  Zap,
+  X,
+  MapPin,
+  ArrowRight,
+  Route,
+} from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { AppLayout } from "@/app/layout/AppLayout";
@@ -19,7 +29,9 @@ export default function LogistDashboard() {
     null,
   );
   // Route inspection mode: when a matched/confirmed shipment is selected
-  const [inspectedRequestId, setInspectedRequestId] = useState<string | null>(null);
+  const [inspectedRequestId, setInspectedRequestId] = useState<string | null>(
+    null,
+  );
 
   const { data: shipments = [], isLoading: isShipmentsLoading } = useQuery({
     queryKey: ["shipments"],
@@ -49,7 +61,7 @@ export default function LogistDashboard() {
     enabled: !!selectedShipment && selectedShipment.status === "pending",
   });
 
-  // Fetch route details when inspecting a matched request
+  // Fetch route details when inspecting a matched requet
   const { data: routeDetails, isLoading: isRouteLoading } = useQuery({
     queryKey: ["route-details", inspectedRequestId],
     queryFn: () => apiClient.getRouteDetails(inspectedRequestId!),
@@ -64,25 +76,31 @@ export default function LogistDashboard() {
       queryClient.invalidateQueries({ queryKey: ["stats"] });
       queryClient.invalidateQueries({ queryKey: ["wagon-suggestion"] });
       queryClient.invalidateQueries({ queryKey: ["wagon-summary"] });
-      toast.success(`Глобальний алгоритм відпрацював! 
-      Витрати на порожній пробіг склали: ${result.total_empty_cost.toLocaleString("uk-UA")} ₴`);
+      const matchSavings = Math.max(0, (result.naive_empty_cost || 0) - result.total_empty_cost);
+      toast.success(
+        `Алгоритм завершив розподіл!\nВитрати: ${result.total_empty_cost.toLocaleString("uk-UA")} ₴\nЕкономія: ~${matchSavings.toLocaleString("uk-UA")} ₴`
+      );
       setSelectedShipment(null);
       setInspectedRequestId(null);
     },
     onError: () => {
       toast.error("Помилка при запуску алгоритму");
-    }
+    },
   });
 
   // Build route highlight data for the map
   const routeHighlight: RouteHighlight | null = useMemo(() => {
     if (!routeDetails || !routeDetails.assignments.length) return null;
 
-    const emptyRunPaths = routeDetails.assignments.map(a =>
-      a.empty_run.path.map(p => p.id)
+    const emptyRunPaths = routeDetails.assignments.map((a) =>
+      a.empty_run.path.map((p) => p.id),
     );
-    const loadedRunPath = routeDetails.assignments[0].loaded_run.path.map(p => p.id);
-    const wagonOrigins = routeDetails.assignments.map(a => a.empty_run.from_station_id);
+    const loadedRunPath = routeDetails.assignments[0].loaded_run.path.map(
+      (p) => p.id,
+    );
+    const wagonOrigins = routeDetails.assignments.map(
+      (a) => a.empty_run.from_station_id,
+    );
 
     return {
       emptyRunPaths,
@@ -98,7 +116,10 @@ export default function LogistDashboard() {
   const pendingCount = shipments.filter((s) => s.status === "pending").length;
   const totalWagons = fleet.length;
   const emptyWagons = fleet.filter((w) => w.isEmpty).length;
-  const matchSavings = stats?.total_empty_cost_uah || 0;
+  
+  const emptyRunCost = stats?.total_empty_cost_uah || 0;
+  const naiveCost = stats?.naive_empty_cost_uah || 0;
+  const matchSavings = Math.max(0, naiveCost - emptyRunCost);
 
   const handleShipmentClick = (shipment: Shipment) => {
     if (shipment.status === "pending") {
@@ -139,12 +160,14 @@ export default function LogistDashboard() {
               Огляд заявок та розумний підбір вагонів
             </p>
           </div>
-          <button 
+          <button
             onClick={handleGlobalConfirm}
             disabled={matchMutation.isPending || pendingCount === 0}
             className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 disabled:opacity-50"
           >
-            {matchMutation.isPending ? "Обчислення..." : (
+            {matchMutation.isPending ? (
+              "Обчислення..."
+            ) : (
               <>
                 <Zap className="h-4 w-4" />
                 Запустити розумний розподіл
@@ -159,7 +182,7 @@ export default function LogistDashboard() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard
             icon={<PackageCheck className="h-5 w-5 text-primary" />}
             label="Заявок очікує"
@@ -176,7 +199,12 @@ export default function LogistDashboard() {
             value={emptyWagons}
           />
           <StatCard
-            icon={<Banknote className="h-5 w-5 text-warning" />}
+            icon={<Banknote className="h-5 w-5 text-orange-500" />}
+            label="Витрати на порожні"
+            value={`${emptyRunCost.toLocaleString("uk-UA")} ₴`}
+          />
+          <StatCard
+            icon={<TrendingUp className="h-5 w-5 text-success" />}
             label="Зекономлено"
             value={`${matchSavings.toLocaleString("uk-UA")} ₴`}
             highlight
@@ -193,9 +221,9 @@ export default function LogistDashboard() {
             ) : (
               <div className="space-y-3">
                 {shipments.map((s) => (
-                  <div 
+                  <div
                     key={s.id}
-                    className={`transition-all ${inspectedRequestId === s.id ? 'ring-2 ring-primary rounded-lg' : ''}`}
+                    className={`transition-all ${inspectedRequestId === s.id ? "ring-2 ring-primary rounded-lg" : ""}`}
                   >
                     <ShipmentCard
                       shipment={s}
@@ -241,23 +269,64 @@ export default function LogistDashboard() {
                         <span>{routeDetails.request.to_station_name}</span>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>Вантаж: <strong>{CARGO_TYPE_LABELS[routeDetails.request.cargo_type as keyof typeof CARGO_TYPE_LABELS] || routeDetails.request.cargo_type}</strong></span>
-                        <span>Потрібно: <strong>{routeDetails.request.required_quantity}</strong></span>
-                        <span>Призначено: <strong className="text-success">{routeDetails.totals.wagons_assigned}</strong></span>
+                        <span>
+                          Вантаж:{" "}
+                          <strong>
+                            {CARGO_TYPE_LABELS[
+                              routeDetails.request
+                                .cargo_type as keyof typeof CARGO_TYPE_LABELS
+                            ] || routeDetails.request.cargo_type}
+                          </strong>
+                        </span>
+                        <span>
+                          Потрібно:{" "}
+                          <strong>
+                            {routeDetails.request.required_quantity}
+                          </strong>
+                        </span>
+                        <span>
+                          Призначено:{" "}
+                          <strong className="text-success">
+                            {routeDetails.totals.wagons_assigned}
+                          </strong>
+                        </span>
                       </div>
                       <div className="flex items-center gap-4 text-xs border-t pt-2 mt-1">
-                        <span>Порожній пробіг: <strong className="text-orange-500">{routeDetails.totals.total_empty_distance_km.toLocaleString("uk-UA")} км</strong></span>
-                        <span>Вартість: <strong className="text-orange-500">{routeDetails.totals.total_empty_cost_uah.toLocaleString("uk-UA")} ₴</strong></span>
+                        <span>
+                          Порожній пробіг:{" "}
+                          <strong className="text-orange-500">
+                            {routeDetails.totals.total_empty_distance_km.toLocaleString(
+                              "uk-UA",
+                            )}{" "}
+                            км
+                          </strong>
+                        </span>
+                        <span>
+                          Вартість:{" "}
+                          <strong className="text-orange-500">
+                            {routeDetails.totals.total_empty_cost_uah.toLocaleString(
+                              "uk-UA",
+                            )}{" "}
+                            ₴
+                          </strong>
+                        </span>
                       </div>
                     </div>
 
                     {/* Individual wagon assignments */}
                     {routeDetails.assignments.map((a, idx) => (
-                      <div key={a.wagon_id} className="rounded-lg border bg-card p-4 space-y-2.5">
+                      <div
+                        key={a.wagon_id}
+                        className="rounded-lg border bg-card p-4 space-y-2.5"
+                      >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono font-semibold">{a.wagon_id}</span>
+                          <span className="text-xs font-mono font-semibold">
+                            {a.wagon_id}
+                          </span>
                           <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-medium">
-                            {WAGON_TYPE_LABELS[a.wagon_type as keyof typeof WAGON_TYPE_LABELS] || a.wagon_type}
+                            {WAGON_TYPE_LABELS[
+                              a.wagon_type as keyof typeof WAGON_TYPE_LABELS
+                            ] || a.wagon_type}
                           </span>
                         </div>
 
@@ -267,11 +336,16 @@ export default function LogistDashboard() {
                             🚃 Порожній пробіг
                           </div>
                           <div className="text-muted-foreground pl-4">
-                            {a.empty_run.path.map(p => p.name).join(' → ')}
+                            {a.empty_run.path.map((p) => p.name).join(" → ")}
                           </div>
                           <div className="pl-4 flex gap-3">
-                            <span>{a.empty_run.distance_km.toLocaleString("uk-UA")} км</span>
-                            <span className="text-orange-500 font-medium">{a.empty_run.cost_uah.toLocaleString("uk-UA")} ₴</span>
+                            <span>
+                              {a.empty_run.distance_km.toLocaleString("uk-UA")}{" "}
+                              км
+                            </span>
+                            <span className="text-orange-500 font-medium">
+                              {a.empty_run.cost_uah.toLocaleString("uk-UA")} ₴
+                            </span>
                           </div>
                         </div>
 
@@ -281,10 +355,13 @@ export default function LogistDashboard() {
                             📦 Вантажний рейс
                           </div>
                           <div className="text-muted-foreground pl-4">
-                            {a.loaded_run.path.map(p => p.name).join(' → ')}
+                            {a.loaded_run.path.map((p) => p.name).join(" → ")}
                           </div>
                           <div className="pl-4">
-                            <span>{a.loaded_run.distance_km.toLocaleString("uk-UA")} км</span>
+                            <span>
+                              {a.loaded_run.distance_km.toLocaleString("uk-UA")}{" "}
+                              км
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -299,10 +376,13 @@ export default function LogistDashboard() {
             ) : (
               /* ── Smart suggestion panel (default) ── */
               <>
-                <h2 className="section-title">🧠 Розумна пропозиція (Локальна)</h2>
+                <h2 className="section-title">
+                  🧠 Розумна пропозиція (Локальна)
+                </h2>
                 {!selectedShipment ? (
                   <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-                    Оберіть заявку зліва, щоб побачити рекомендовані найближчі вагони
+                    Оберіть заявку зліва, щоб побачити рекомендовані найближчі
+                    вагони
                   </div>
                 ) : selectedShipment.status !== "pending" ? (
                   <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -320,16 +400,17 @@ export default function LogistDashboard() {
                       </p>
                     ) : (
                       <>
-                      {suggestions.map((s) => (
-                        <WagonSuggestionCard
-                          key={s.wagonId}
-                          suggestion={s}
-                          onConfirm={handleGlobalConfirm}
-                        />
-                      ))}
-                      <p className="text-xs text-muted-foreground text-center mt-4">
-                        Натисніть «Призначити» щоб запустити глобальний алгоритм для всіх очікуючих заявок.
-                      </p>
+                        {suggestions.map((s) => (
+                          <WagonSuggestionCard
+                            key={s.wagonId}
+                            suggestion={s}
+                            onConfirm={handleGlobalConfirm}
+                          />
+                        ))}
+                        <p className="text-xs text-muted-foreground text-center mt-4">
+                          Натисніть «Призначити» щоб запустити глобальний
+                          алгоритм для всіх очікуючих заявок.
+                        </p>
                       </>
                     )}
                   </div>

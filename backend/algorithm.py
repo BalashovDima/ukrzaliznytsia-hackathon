@@ -18,10 +18,13 @@ def run_matching_algorithm(active_requests: List[ClientRequest], available_wagon
     """
     Matches available wagons to clients' requests minimizing empty run distances.
     Prioritizes full fulfillment.
+    Also computes a naive baseline (random assignment expected cost) for comparison.
     """
     all_assignments = []
     total_distance = 0.0
     total_cost = 0.0
+    naive_total_distance = 0.0
+    naive_total_cost = 0.0
 
     # Group requests by cargo type, because we can only match specific wagons to specific cargo
     requests_by_type: Dict[WagonType, List[ClientRequest]] = {wt: [] for wt in WagonType}
@@ -72,6 +75,15 @@ def run_matching_algorithm(active_requests: List[ClientRequest], available_wagon
         # linear_sum_assignment finds a matching that minimizes the sum of selected elements.
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
+        num_assigned = len(row_ind)
+
+        # ── Naïve baseline: expected cost of random assignment ──
+        # Mean cell value × number of pairs = expected total under random matching.
+        if cost_matrix.size > 0 and num_assigned > 0:
+            mean_distance = float(np.mean(cost_matrix))
+            naive_total_distance += mean_distance * num_assigned
+            naive_total_cost += mean_distance * COST_PER_KM * num_assigned
+
         # Create Assignment objects based on the result
         for i, j in zip(row_ind, col_ind):
             wagon = type_wagons[i]
@@ -94,5 +106,7 @@ def run_matching_algorithm(active_requests: List[ClientRequest], available_wagon
     return MatchResult(
         assignments=all_assignments,
         total_empty_distance=total_distance,
-        total_empty_cost=total_cost
+        total_empty_cost=total_cost,
+        naive_empty_distance=naive_total_distance,
+        naive_empty_cost=naive_total_cost,
     )

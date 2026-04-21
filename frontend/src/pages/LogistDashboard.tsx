@@ -12,9 +12,11 @@ import {
   MapPin,
   ArrowRight,
   Route,
+  ChevronLeft,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { AppLayout } from "@/app/layout/AppLayout";
 import type { Shipment } from "@/entities/shipment/types";
 import { apiClient } from "@/shared/lib/api-client";
@@ -141,6 +143,9 @@ export default function LogistDashboard() {
       setSelectedShipment(shipment);
       setInspectedRequestId(null);
       setShowNaiveRoute(false);
+      if (window.innerWidth < 1024) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } else {
       if (inspectedRequestId === shipment.id) {
         setInspectedRequestId(null);
@@ -149,6 +154,9 @@ export default function LogistDashboard() {
       } else {
         setInspectedRequestId(shipment.id);
         setSelectedShipment(shipment);
+        if (window.innerWidth < 1024) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
       }
     }
   };
@@ -164,6 +172,7 @@ export default function LogistDashboard() {
   };
 
   const isInspecting = !!inspectedRequestId;
+  const isPanelActive = !!selectedShipment;
 
   return (
     <AppLayout>
@@ -200,7 +209,7 @@ export default function LogistDashboard() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4", isPanelActive && "max-lg:hidden")}>
           <StatCard
             icon={<PackageCheck className="h-5 w-5 text-primary" />}
             label="Заявок очікує"
@@ -232,7 +241,7 @@ export default function LogistDashboard() {
         {/* Main content */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Shipment list */}
-          <div className="lg:col-span-3 space-y-3">
+          <div className={cn("lg:col-span-3 space-y-3", isPanelActive && "max-lg:hidden")}>
             <h2 className="section-title">Заявки на перевезення</h2>
             {isShipmentsLoading ? (
               <p className="text-sm text-muted-foreground">Завантаження...</p>
@@ -259,10 +268,19 @@ export default function LogistDashboard() {
               /* ── Route inspection panel ── */
               <>
                 <div className="flex items-center justify-between">
-                  <h2 className="section-title flex items-center gap-2">
-                    <Route className="h-4 w-4" />
-                    Деталі маршруту
-                  </h2>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleCloseInspection}
+                      className="lg:hidden p-1.5 -ml-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-1"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                      <span className="text-sm font-medium">Назад</span>
+                    </button>
+                    <h2 className="section-title flex items-center gap-2 lg:m-0 max-lg:hidden">
+                      <Route className="h-4 w-4" />
+                      Деталі маршруту
+                    </h2>
+                  </div>
                   <div className="flex items-center gap-2">
                     {/* Algorithm toggle */}
                     {naiveRouteHighlight && (
@@ -291,7 +309,7 @@ export default function LogistDashboard() {
                     )}
                     <button
                       onClick={handleCloseInspection}
-                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                      className="hidden lg:block p-1.5 rounded-md hover:bg-muted transition-colors"
                       title="Закрити"
                     >
                       <X className="h-4 w-4" />
@@ -440,9 +458,18 @@ export default function LogistDashboard() {
             ) : (
               /* ── Pending Request Info Panel ── */
               <>
-                <h2 className="section-title">
-                  💡 Глобальна оптимізація
-                </h2>
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    onClick={handleCloseInspection}
+                    className="lg:hidden p-1.5 -ml-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-1"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                    <span className="text-sm font-medium">Назад</span>
+                  </button>
+                  <h2 className="section-title lg:m-0 max-lg:hidden">
+                    💡 Глобальна оптимізація
+                  </h2>
+                </div>
                 {!selectedShipment ? (
                   <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
                     Оберіть заявку зліва, щоб переглянути деталі

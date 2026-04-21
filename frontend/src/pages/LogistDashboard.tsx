@@ -209,28 +209,38 @@ export default function LogistDashboard() {
         </div>
 
         {/* Stats */}
-        <div className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4", isPanelActive && "max-lg:hidden")}>
+        <div
+          className={cn(
+            "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 -mx-4 px-4 lg:grid lg:grid-cols-5 lg:gap-4 lg:p-0 lg:m-0 lg:overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]",
+            isPanelActive && "max-lg:hidden"
+          )}
+        >
           <StatCard
+            className="min-w-[160px] snap-start shrink-0 lg:min-w-0 lg:shrink"
             icon={<PackageCheck className="h-5 w-5 text-primary" />}
             label="Заявок очікує"
             value={pendingCount}
           />
           <StatCard
+            className="min-w-[160px] snap-start shrink-0 lg:min-w-0 lg:shrink"
             icon={<Train className="h-5 w-5 text-info" />}
             label="Вагонів всього"
             value={totalWagons}
           />
           <StatCard
+            className="min-w-[160px] snap-start shrink-0 lg:min-w-0 lg:shrink"
             icon={<TrendingUp className="h-5 w-5 text-success" />}
             label="Порожніх вагонів"
             value={emptyWagons}
           />
           <StatCard
+            className="min-w-[170px] snap-start shrink-0 lg:min-w-0 lg:shrink"
             icon={<Banknote className="h-5 w-5 text-orange-500" />}
             label="Витрати на порожні"
             value={`${emptyRunCost.toLocaleString("uk-UA")} ₴`}
           />
           <StatCard
+            className="min-w-[170px] snap-end shrink-0 lg:min-w-0 lg:shrink"
             icon={<TrendingUp className="h-5 w-5 text-success" />}
             label="Зекономлено"
             value={`${matchSavings.toLocaleString("uk-UA")} ₴`}
@@ -506,14 +516,16 @@ function StatCard({
   label,
   value,
   highlight,
+  className,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   highlight?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="stat-card">
+    <div className={cn("stat-card", className)}>
       <div className="flex items-center gap-3">
         {icon}
         <div>

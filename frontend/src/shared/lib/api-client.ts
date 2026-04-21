@@ -62,7 +62,7 @@ function mapWagon(w: BackendWagon): Wagon {
     id: w.id,
     type: w.type as any,
     currentStationId: w.current_station_id,
-    isEmpty: w.status === "free" || w.status === "en_route_empty",
+    isEmpty: w.status === "free",
   };
 }
 

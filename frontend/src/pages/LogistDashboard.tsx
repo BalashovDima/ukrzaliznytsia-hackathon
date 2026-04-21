@@ -30,6 +30,8 @@ export default function LogistDashboard() {
   const [inspectedRequestId, setInspectedRequestId] = useState<string | null>(
     null,
   );
+  // Toggle: show naive (greedy) algorithm routes on the map
+  const [showNaiveRoute, setShowNaiveRoute] = useState(false);
 
   const { data: shipments = [], isLoading: isShipmentsLoading } = useQuery({
     queryKey: ["shipments"],
@@ -97,6 +99,35 @@ export default function LogistDashboard() {
     };
   }, [routeDetails]);
 
+  // Build NAIVE route highlight from naive_comparison paths
+  const naiveRouteHighlight: RouteHighlight | null = useMemo(() => {
+    if (!routeDetails || !routeDetails.assignments.length) return null;
+    const assignmentsWithNaive = routeDetails.assignments.filter(
+      (a) => a.naive_comparison !== null,
+    );
+    if (!assignmentsWithNaive.length) return null;
+
+    const emptyRunPaths = assignmentsWithNaive.map((a) =>
+      a.naive_comparison!.path.map((p) => p.id),
+    );
+    const loadedRunPath = routeDetails.assignments[0].loaded_run.path.map(
+      (p) => p.id,
+    );
+    const wagonOrigins = assignmentsWithNaive.map(
+      (a) => a.naive_comparison!.from_station_id,
+    );
+
+    return {
+      emptyRunPaths,
+      loadedRunPath,
+      highlightStations: {
+        wagonOrigins,
+        pickupStation: routeDetails.request.from_station_id,
+        deliveryStation: routeDetails.request.to_station_id,
+      },
+    };
+  }, [routeDetails]);
+
   const pendingCount = shipments.filter((s) => s.status === "pending").length;
   const totalWagons = fleet.length;
   const emptyWagons = fleet.filter((w) => w.isEmpty).length;
@@ -107,15 +138,14 @@ export default function LogistDashboard() {
 
   const handleShipmentClick = (shipment: Shipment) => {
     if (shipment.status === "pending") {
-      // Pending → show suggestions
       setSelectedShipment(shipment);
       setInspectedRequestId(null);
+      setShowNaiveRoute(false);
     } else {
-      // Matched/Confirmed → toggle route inspection
       if (inspectedRequestId === shipment.id) {
-        // Clicking again → deselect
         setInspectedRequestId(null);
         setSelectedShipment(null);
+        setShowNaiveRoute(false);
       } else {
         setInspectedRequestId(shipment.id);
         setSelectedShipment(shipment);
@@ -126,6 +156,7 @@ export default function LogistDashboard() {
   const handleCloseInspection = () => {
     setInspectedRequestId(null);
     setSelectedShipment(null);
+    setShowNaiveRoute(false);
   };
 
   const handleGlobalConfirm = () => {
@@ -162,7 +193,10 @@ export default function LogistDashboard() {
 
         {/* Map Visualization */}
         <div className="w-full">
-          <RailwayMap routeHighlight={routeHighlight} />
+          <RailwayMap 
+            routeHighlight={isInspecting ? (showNaiveRoute ? naiveRouteHighlight : routeHighlight) : null} 
+            showNaiveRoute={showNaiveRoute}
+          />
         </div>
 
         {/* Stats */}
@@ -229,13 +263,40 @@ export default function LogistDashboard() {
                     <Route className="h-4 w-4" />
                     Деталі маршруту
                   </h2>
-                  <button
-                    onClick={handleCloseInspection}
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                    title="Закрити"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Algorithm toggle */}
+                    {naiveRouteHighlight && (
+                      <div className="flex items-center rounded-md border overflow-hidden text-xs font-medium">
+                        <button
+                          onClick={() => setShowNaiveRoute(false)}
+                          className={`px-2.5 py-1 transition-colors ${
+                            !showNaiveRoute
+                              ? "bg-blue-600 text-white"
+                              : "bg-background text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          🧠 Алгоритм
+                        </button>
+                        <button
+                          onClick={() => setShowNaiveRoute(true)}
+                          className={`px-2.5 py-1 transition-colors ${
+                            showNaiveRoute
+                              ? "bg-orange-500 text-white"
+                              : "bg-background text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          🎲 Жадібний
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={handleCloseInspection}
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                      title="Закрити"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {isRouteLoading ? (
@@ -278,7 +339,7 @@ export default function LogistDashboard() {
                       <div className="flex items-center gap-4 text-xs border-t pt-2 mt-1">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-1 w-full">
                           <div className="text-muted-foreground">🧠 Алгоритм:</div>
-                          <div className="font-medium text-green-600">
+                          <div className="font-medium text-blue-600">
                             {routeDetails.totals.total_empty_distance_km.toLocaleString("uk-UA")} км
                             {" · "}
                             {routeDetails.totals.total_empty_cost_uah.toLocaleString("uk-UA")} ₴
@@ -321,14 +382,14 @@ export default function LogistDashboard() {
                         </div>
 
                         {/* Smart pick (optimized) */}
-                        <div className="text-xs space-y-1 bg-green-50 rounded-md px-3 py-2">
-                          <div className="font-semibold text-green-700 flex items-center gap-1">
+                        <div className="text-xs space-y-1 bg-blue-50 rounded-md px-3 py-2">
+                          <div className="font-semibold text-blue-700 flex items-center gap-1">
                             🧠 Алгоритм: <span className="font-mono ml-1">{a.wagon_id}</span>
                           </div>
                           <div className="text-muted-foreground">
                             {a.empty_run.path.map((p) => p.name).join(" → ")}
                           </div>
-                          <div className="flex gap-3 font-medium text-green-700">
+                          <div className="flex gap-3 font-medium text-blue-700">
                             <span>{a.empty_run.distance_km.toLocaleString("uk-UA")} км</span>
                             <span>{a.empty_run.cost_uah.toLocaleString("uk-UA")} ₴</span>
                           </div>
